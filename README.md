@@ -6,5 +6,12 @@ high flexibility.
 
 ## Dependencies
 
+* Python 3
 * TensorFlow 1.2.0+
 * pymongo 3.4+
+
+## Installation
+
+```bash
+pip3 install photinia
+```
