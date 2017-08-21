@@ -1178,3 +1178,116 @@ class TransCNN(Widget):
     @property
     def init_flat_size(self):
         return self._init_flat_size
+
+
+class SoftAttention(Widget):
+    """Soft attention.
+
+    The algorithm is described below:
+
+        Context sequence: C = {c_1, c_2, ..., c_n}, in which c_i in R^n.
+        State: S in R^m.
+        Context weight: W, a 1 by n matrix.
+        State weight: U, a 1 by m matrix.
+
+        Attention sequence: A = {a_1, a_2, ..., a_n}, in which a_i in R. A is computed as follow:
+            a'_i = W @ c_i + U @ S
+            A = softmax(a'_1, a'_2, ..., a'_n)
+        Attention context: AC = sum(A * C)
+    """
+
+    def __init__(self,
+                 name,
+                 context_size,
+                 state_size):
+        self._context_size = context_size
+        self._state_size = state_size
+        super(SoftAttention, self).__init__(name)
+
+    @property
+    def context_size(self):
+        return self._context_size
+
+    @property
+    def state_size(self):
+        return self._state_size
+
+    def _build(self):
+        bound = math.sqrt(6.0 / self._context_size)
+        w_init = tf.random_uniform(
+            minval=-bound,
+            maxval=bound,
+            shape=(self._context_size, 1),
+            dtype=D_TYPE,
+            name='w_init'
+        )
+        self._w = tf.Variable(w_init, dtype=D_TYPE, name='w')
+        bound = math.sqrt(6.0 / self._state_size)
+        u_init = tf.random_uniform(
+            minval=-bound,
+            maxval=bound,
+            shape=(self._state_size, 1),
+            dtype=D_TYPE,
+            name='u_init'
+        )
+        self._u = tf.Variable(u_init, dtype=D_TYPE, name='u')
+
+    @property
+    def w(self):
+        return self._w
+
+    @property
+    def u(self):
+        return self._u
+
+    def _setup(self, context_seq, prev_state, activation=tf.nn.tanh):
+        """Setup a soft attention mechanism for the given context sequence and state.
+        The result is an attention context for the state.
+
+        :param context_seq: The context sequence tensor.
+            Its shape is defined as (batch_size, seq_length, context_size).
+        :param prev_state: The state tensor.
+            Its shape is defined as (batch_size, state_size).
+        :param activation: The activation function.
+            Default is tf.nn.tanh.
+        :return: An attention context with shape (batch_size, context_size).
+        """
+        #
+        # (batch_size, seq_length, context_size)
+        # [transpose] -> (seq_length, batch_size, context_size)
+        context_seq_t = tf.transpose(context_seq, (1, 0, 2))
+        #
+        # (seq_length, batch_size, context_size)
+        # [map] -> (batch_size, context_size)...
+        # [attention] -> (batch_size, 1)...
+        # [map] -> (seq_length, batch_size, 1)
+        # [transpose] -> (batch_size, seq_length, 1)
+        # [softmax] -> (batch_size, seq_length, 1)
+        a_seq_t = tf.map_fn(
+            fn=lambda context: self._attention(context, prev_state, activation),
+            elems=context_seq_t
+        )
+        a_seq = tf.transpose(a_seq_t, (1, 0, 2))
+        a_seq = tf.nn.softmax(a_seq, dim=1)
+        #
+        # (batch_size, seq_length, context_size) * (batch_size, seq_length, 1)
+        # -> (batch_size, seq_length, context_size)
+        # [reduce_sum] -> (batch_size, context_size)
+        att_context_seq = a_seq * context_seq
+        att_context = tf.reduce_sum(att_context_seq, 1)
+        #
+        # (batch_size, seq_length, 1)
+        # [reshape] -> (batch_size, seq_length)
+        batch_size, seq_length, _ = tf.shape(a_seq)
+        a_seq = tf.reshape(a_seq, (batch_size, seq_length))
+        return att_context, a_seq
+
+    def _attention(self, context, prev_state, activation):
+        #
+        # (batch_size, context_size) @ (context_size, 1) -> (batch_size, 1)
+        # (batch_size, state_size) @ (state_size, 1) -> (batch_size, 1)
+        # (batch_size, 1) + (batch_size, 1) -> (batch_size, 1)
+        a = tf.matmul(context, self._w) + tf.matmul(prev_state, self._u)
+        if activation is not None:
+            a = activation(a)
+        return a

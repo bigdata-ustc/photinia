@@ -287,10 +287,12 @@ class Trainable(widgets.Widget):
         pass
 
     def _add_slot(self, name,
-                  outputs=None,
                   inputs=None,
+                  outputs=None,
                   givens=None,
                   updates=None):
+        if name in self._slots:
+            raise ValueError('Slot {} exists.'.format(name))
         slot = Slot(
             session=self._session,
             outputs=outputs,
