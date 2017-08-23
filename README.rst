@@ -16,5 +16,6 @@ Installation
 ------------
 
 The package can be installed directly from PyPI repository::
+
     pip3 install photinia
 
