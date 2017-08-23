@@ -4,12 +4,12 @@
 from setuptools import setup
 
 if __name__ == '__main__':
-    with open('README.md') as file:
+    with open('README.rst') as file:
         long_description = file.read()
     setup(
         name='photinia',
         packages=['photinia'],
-        version='0.1.1',
+        version='0.1.1.20170823',
         keywords=('deep learning', 'neural network'),
         description='Build deep learning models quickly for scientists in an object-oriented way.',
         long_description=long_description,
