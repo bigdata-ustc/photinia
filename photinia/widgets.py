@@ -668,14 +668,38 @@ class GRUCell(Widget):
         :return: None
         """
         bound = math.sqrt(6.0 / (self._input_size + self._state_size))
-        w_init_value = tf.random_uniform(
+        wz_init_value = tf.random_uniform(
+            minval=-bound,
+            maxval=bound,
+            dtype=D_TYPE,
+            shape=(self._input_size, self._state_size)
+        )
+        wr_init_value = tf.random_uniform(
+            minval=-bound,
+            maxval=bound,
+            dtype=D_TYPE,
+            shape=(self._input_size, self._state_size)
+        )
+        wh_init_value = tf.random_uniform(
             minval=-bound,
             maxval=bound,
             dtype=D_TYPE,
             shape=(self._input_size, self._state_size)
         )
         bound = math.sqrt(6.0 / (self._state_size + self._state_size))
-        u_init_value = tf.random_uniform(
+        uz_init_value = tf.random_uniform(
+            minval=-bound,
+            maxval=bound,
+            dtype=D_TYPE,
+            shape=(self._state_size, self._state_size)
+        )
+        ur_init_value = tf.random_uniform(
+            minval=-bound,
+            maxval=bound,
+            dtype=D_TYPE,
+            shape=(self._state_size, self._state_size)
+        )
+        uh_init_value = tf.random_uniform(
             minval=-bound,
             maxval=bound,
             dtype=D_TYPE,
@@ -685,16 +709,16 @@ class GRUCell(Widget):
             dtype=D_TYPE,
             shape=(self._state_size,)
         )
-        self._wz = tf.Variable(name='wz', dtype=D_TYPE, initial_value=w_init_value)
-        self._uz = tf.Variable(name='uz', dtype=D_TYPE, initial_value=u_init_value)
+        self._wz = tf.Variable(name='wz', dtype=D_TYPE, initial_value=wz_init_value)
+        self._uz = tf.Variable(name='uz', dtype=D_TYPE, initial_value=uz_init_value)
         self._bz = tf.Variable(name='bz', dtype=D_TYPE, initial_value=b_init_value)
         #
-        self._wr = tf.Variable(name='wr', dtype=D_TYPE, initial_value=w_init_value)
-        self._ur = tf.Variable(name='ur', dtype=D_TYPE, initial_value=u_init_value)
+        self._wr = tf.Variable(name='wr', dtype=D_TYPE, initial_value=wr_init_value)
+        self._ur = tf.Variable(name='ur', dtype=D_TYPE, initial_value=ur_init_value)
         self._br = tf.Variable(name='br', dtype=D_TYPE, initial_value=b_init_value)
         #
-        self._wh = tf.Variable(name='wh', dtype=D_TYPE, initial_value=w_init_value)
-        self._uh = tf.Variable(name='uh', dtype=D_TYPE, initial_value=u_init_value)
+        self._wh = tf.Variable(name='wh', dtype=D_TYPE, initial_value=wh_init_value)
+        self._uh = tf.Variable(name='uh', dtype=D_TYPE, initial_value=uh_init_value)
         self._bh = tf.Variable(name='bh', dtype=D_TYPE, initial_value=b_init_value)
 
     def _setup(self, x, prev_state):
@@ -796,12 +820,42 @@ class LSTMCell(Widget):
 
         :return: None
         """
-        w_init_value = tf.random_normal(
+        wi_init_value = tf.random_normal(
             dtype=D_TYPE,
             shape=(self._input_size, self._state_size),
             stddev=1.0 / (self._input_size + self._state_size)
         )
-        u_init_value = tf.random_normal(
+        wf_init_value = tf.random_normal(
+            dtype=D_TYPE,
+            shape=(self._input_size, self._state_size),
+            stddev=1.0 / (self._input_size + self._state_size)
+        )
+        wo_init_value = tf.random_normal(
+            dtype=D_TYPE,
+            shape=(self._input_size, self._state_size),
+            stddev=1.0 / (self._input_size + self._state_size)
+        )
+        wc_init_value = tf.random_normal(
+            dtype=D_TYPE,
+            shape=(self._input_size, self._state_size),
+            stddev=1.0 / (self._input_size + self._state_size)
+        )
+        ui_init_value = tf.random_normal(
+            dtype=D_TYPE,
+            shape=(self._state_size, self._state_size),
+            stddev=1.0 / (self._state_size + self._state_size)
+        )
+        uf_init_value = tf.random_normal(
+            dtype=D_TYPE,
+            shape=(self._state_size, self._state_size),
+            stddev=1.0 / (self._state_size + self._state_size)
+        )
+        uo_init_value = tf.random_normal(
+            dtype=D_TYPE,
+            shape=(self._state_size, self._state_size),
+            stddev=1.0 / (self._state_size + self._state_size)
+        )
+        uc_init_value = tf.random_normal(
             dtype=D_TYPE,
             shape=(self._state_size, self._state_size),
             stddev=1.0 / (self._state_size + self._state_size)
@@ -810,20 +864,20 @@ class LSTMCell(Widget):
             dtype=D_TYPE,
             shape=(self._state_size,)
         )
-        self._wi = tf.Variable(name='wi', dtype=D_TYPE, initial_value=w_init_value)
-        self._ui = tf.Variable(name='ui', dtype=D_TYPE, initial_value=u_init_value)
+        self._wi = tf.Variable(name='wi', dtype=D_TYPE, initial_value=wi_init_value)
+        self._ui = tf.Variable(name='ui', dtype=D_TYPE, initial_value=ui_init_value)
         self._bi = tf.Variable(name='bi', dtype=D_TYPE, initial_value=b_init_value)
         #
-        self._wf = tf.Variable(name='wf', dtype=D_TYPE, initial_value=w_init_value)
-        self._uf = tf.Variable(name='uf', dtype=D_TYPE, initial_value=u_init_value)
+        self._wf = tf.Variable(name='wf', dtype=D_TYPE, initial_value=wf_init_value)
+        self._uf = tf.Variable(name='uf', dtype=D_TYPE, initial_value=uf_init_value)
         self._bf = tf.Variable(name='bf', dtype=D_TYPE, initial_value=b_init_value)
         #
-        self._wo = tf.Variable(name='wo', dtype=D_TYPE, initial_value=w_init_value)
-        self._uo = tf.Variable(name='uo', dtype=D_TYPE, initial_value=u_init_value)
+        self._wo = tf.Variable(name='wo', dtype=D_TYPE, initial_value=wo_init_value)
+        self._uo = tf.Variable(name='uo', dtype=D_TYPE, initial_value=uo_init_value)
         self._bo = tf.Variable(name='bo', dtype=D_TYPE, initial_value=b_init_value)
         #
-        self._wc = tf.Variable(name='wc', dtype=D_TYPE, initial_value=w_init_value)
-        self._uc = tf.Variable(name='uc', dtype=D_TYPE, initial_value=u_init_value)
+        self._wc = tf.Variable(name='wc', dtype=D_TYPE, initial_value=wc_init_value)
+        self._uc = tf.Variable(name='uc', dtype=D_TYPE, initial_value=uc_init_value)
         self._bc = tf.Variable(name='bc', dtype=D_TYPE, initial_value=b_init_value)
 
     def _setup(self, x, prev_state, prev_output):
@@ -1185,52 +1239,68 @@ class SoftAttention(Widget):
 
     The algorithm is described below:
 
-        Context sequence: C = {c_1, c_2, ..., c_n}, in which c_i in R^n.
-        State: S in R^m.
-        Context weight: W, a 1 by n matrix.
-        State weight: U, a 1 by m matrix.
+        Sequence: S = {s_1, s_2, ..., s_n'}, in which s_i in R^n.
+        Vector: v in R^m.
+        Sequence weight: W, a k by n matrix.
+        Vector weight: U, a k by m matrix.
+        Omega, a k dimension vector.
 
-        Attention sequence: A = {a_1, a_2, ..., a_n}, in which a_i in R. A is computed as follow:
-            a'_i = W @ c_i + U @ S
-            A = softmax(a'_1, a'_2, ..., a'_n)
+        Attention sequence: A = {a_1, a_2, ..., a_n'}, in which a_i in R. A is computed as follow:
+            a'_i = tanh(W @ c_i + U @ S)
+            A = softmax(omega @ A')
         Attention context: AC = sum(A * C)
     """
 
     def __init__(self,
                  name,
-                 context_size,
-                 state_size):
-        self._context_size = context_size
-        self._state_size = state_size
+                 seq_elem_size,
+                 vec_size,
+                 common_size):
+        self._seq_elem_size = seq_elem_size
+        self._vec_size = vec_size
+        self._common_size = common_size
         super(SoftAttention, self).__init__(name)
 
     @property
-    def context_size(self):
-        return self._context_size
+    def seq_elem_size(self):
+        return self._seq_elem_size
 
     @property
-    def state_size(self):
-        return self._state_size
+    def vec_size(self):
+        return self._vec_size
+
+    @property
+    def common_size(self):
+        return self._common_size
 
     def _build(self):
-        bound = math.sqrt(6.0 / self._context_size)
+        bound = math.sqrt(6.0 / (self._seq_elem_size + self._common_size))
         w_init = tf.random_uniform(
             minval=-bound,
             maxval=bound,
-            shape=(self._context_size, 1),
+            shape=(self._seq_elem_size, self._common_size),
             dtype=D_TYPE,
             name='w_init'
         )
         self._w = tf.Variable(w_init, dtype=D_TYPE, name='w')
-        bound = math.sqrt(6.0 / self._state_size)
+        bound = math.sqrt(6.0 / (self._vec_size + self._common_size))
         u_init = tf.random_uniform(
             minval=-bound,
             maxval=bound,
-            shape=(self._state_size, 1),
+            shape=(self._vec_size, self._common_size),
             dtype=D_TYPE,
             name='u_init'
         )
         self._u = tf.Variable(u_init, dtype=D_TYPE, name='u')
+        bound = math.sqrt(6.0 / self._common_size)
+        omega_init = tf.random_uniform(
+            minval=-bound,
+            maxval=bound,
+            shape=(self._common_size, 1),
+            dtype=D_TYPE,
+            name='omega_init'
+        )
+        self._omega = tf.Variable(omega_init, dtype=D_TYPE, name='omega')
 
     @property
     def w(self):
@@ -1240,54 +1310,42 @@ class SoftAttention(Widget):
     def u(self):
         return self._u
 
-    def _setup(self, context_seq, prev_state, activation=tf.nn.tanh):
+    @property
+    def omega(self):
+        return self._omega
+
+    def _setup(self, seq, vec, activation=tf.nn.tanh):
         """Setup a soft attention mechanism for the given context sequence and state.
         The result is an attention context for the state.
 
-        :param context_seq: The context sequence tensor.
-            Its shape is defined as (batch_size, seq_length, context_size).
-        :param prev_state: The state tensor.
-            Its shape is defined as (batch_size, state_size).
+        :param seq: The sequence tensor.
+            Its shape is defined as (seq_length, batch_size, seq_elem_size).
+        :param vec: The vector tensor.
+            Its shape is defined as (batch_size, vec_size).
         :param activation: The activation function.
             Default is tf.nn.tanh.
-        :return: An attention context with shape (batch_size, context_size).
+        :return: An attention context with shape (batch_size, seq_elem_size).
         """
         #
-        # (batch_size, seq_length, context_size)
-        # [transpose] -> (seq_length, batch_size, context_size)
-        context_seq_t = tf.transpose(context_seq, (1, 0, 2))
+        # (seq_length, batch_size, seq_elem_size) @ (seq_elem_size, common_size)
+        # -> (seq_length, batch_size, common_size)
+        a = tf.tensordot(seq, self._w, ((2,), (0,)))
         #
-        # (seq_length, batch_size, context_size)
-        # [map] -> (batch_size, context_size)...
-        # [attention] -> (batch_size, 1)...
-        # [map] -> (seq_length, batch_size, 1)
-        # [transpose] -> (batch_size, seq_length, 1)
-        # [softmax] -> (batch_size, seq_length, 1)
-        a_seq_t = tf.map_fn(
-            fn=lambda context: self._attention(context, prev_state, activation),
-            elems=context_seq_t
-        )
-        a_seq = tf.transpose(a_seq_t, (1, 0, 2))
-        a_seq = tf.nn.softmax(a_seq, dim=1)
+        # (batch_size, vec_size) @ (vec_size, common_size)
+        # -> (batch_size, common_size)
+        # -> (1, batch_size, common_size)
+        b = tf.matmul(vec, self._u)
+        b = tf.reshape(b, (1, -1, self._common_size))
         #
-        # (batch_size, seq_length, context_size) * (batch_size, seq_length, 1)
-        # -> (batch_size, seq_length, context_size)
-        # [reduce_sum] -> (batch_size, context_size)
-        att_context_seq = a_seq * context_seq
-        att_context = tf.reduce_sum(att_context_seq, 1)
+        # -> (seq_length, batch_size, common_size)
+        # (seq_length, batch_size, common_size) @ (common_size, 1)
+        # -> (seq_length, batch_size, 1)
+        a = activation(a + b) if activation is not None else a + b
+        a = tf.tensordot(a, self._omega, ((2,), (0,)))
+        a = tf.nn.softmax(a, dim=1)
         #
-        # (batch_size, seq_length, 1)
-        # [reshape] -> (batch_size, seq_length)
-        batch_size, seq_length, _ = tf.shape(a_seq)
-        a_seq = tf.reshape(a_seq, (batch_size, seq_length))
-        return att_context, a_seq
-
-    def _attention(self, context, prev_state, activation):
-        #
-        # (batch_size, context_size) @ (context_size, 1) -> (batch_size, 1)
-        # (batch_size, state_size) @ (state_size, 1) -> (batch_size, 1)
-        # (batch_size, 1) + (batch_size, 1) -> (batch_size, 1)
-        a = tf.matmul(context, self._w) + tf.matmul(prev_state, self._u)
-        if activation is not None:
-            a = activation(a)
-        return a
+        # (seq_length, batch_size, 1) * (seq_length, batch_size, seq_elem_size)
+        # -> (seq_length, batch_size, seq_elem_size)
+        # -> (batch_size, seq_elem_size)
+        att_context = tf.reduce_sum(a * seq, 0)
+        return att_context
