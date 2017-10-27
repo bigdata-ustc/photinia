@@ -8,18 +8,18 @@
 import collections
 import os
 import sys
+from urllib import request
 
 import gflags
 import numpy as np
-import pymongo
 import tensorflow as tf
 
 import photinia
 import pickle
 
 
-class CharEmb(photinia.Trainable):
-    """Character embedding
+class Model(photinia.Trainable):
+    """模型定义
     """
 
     def __init__(self,
@@ -28,23 +28,33 @@ class CharEmb(photinia.Trainable):
                  voc_size,
                  emb_size,
                  state_size):
-        photinia.Trainable.__init__(self, name, session)
-        #
+        """模型初始化
+
+        :param name: 模型名
+        :param session: 使用的tensorflow会话
+        :param voc_size: 字典维度
+        :param emb_size: 词embedding维度
+        :param state_size: GRU单元隐藏单元维度
+        """
         self._voc_size = voc_size
         self._emb_size = emb_size
         self._state_size = state_size
+        photinia.Trainable.__init__(self, name, session)
 
     def _build(self):
+        # 网络模块定义 --- build
+        self._emb = photinia.Linear('EMB', self._voc_size, self._emb_size).build()
+        self._cell = photinia.GRUCell('CELL', self._emb_size, self._state_size).build()
+        self._lin = photinia.Linear('LIN', self._state_size, self._voc_size).build()
+        # 输入定义
         seq = tf.placeholder(
             shape=(None, None, self._voc_size),
             dtype=photinia.D_TYPE
         )
         seq_0 = seq[:, :-1, :]
         seq_1 = seq[:, 1:, :]
-        self._emb = photinia.Linear('EMB', self._voc_size, self._emb_size).build()
-        self._cell = photinia.GRUCell('CELL', self._emb_size, self._state_size).build()
-        self._lin = photinia.Linear('LIN', self._state_size, self._voc_size).build()
         batch_size = tf.shape(seq)[0]
+        # RNN结构
         init_state = tf.zeros(
             shape=(batch_size, self._state_size),
             dtype=photinia.D_TYPE
@@ -79,17 +89,16 @@ class CharEmb(photinia.Trainable):
             inputs=seq
         )
         #
-        #
-        char = tf.placeholder(
+        word = tf.placeholder(
             shape=(None, self._voc_size),
             dtype=photinia.D_TYPE
         )
-        emb = self._emb.setup(char)
+        emb = self._emb.setup(word)
         emb = photinia.lrelu(emb)
         self._add_slot(
             'embedding',
             outputs=emb,
-            inputs=char
+            inputs=word
         )
 
     def _rnn_step(self, acc, elem):
@@ -108,38 +117,43 @@ class CharEmb(photinia.Trainable):
         return tf.one_hot(tf.arg_max(prob, 1), self._voc_size)
 
 
-class DanmuDataSource(photinia.DataSource):
-    """Danmu data source.
+class PTBData(photinia.DataSource):
+    """数据源定义
     """
 
     def __init__(self,
-                 host,
-                 db,
-                 coll,
+                 directory,
                  min_len,
-                 max_len,
-                 max_num):
-        text_list = []
-        with pymongo.MongoClient(host) as conn:
-            db = conn[db]
-            coll = db[coll]
-            query = coll.find({}, {'text': 1}).limit(max_num)
-            for danmu in query:
-                text = danmu['text']
-                if len(text) < min_len or len(text) > max_len:
-                    continue
-                text_list.append(text + '\n')
-        #
-        self._init_groups(text_list)
-        self._init_encoder(text_list)
-        for key, value in self._groups.items():
-            print(key, len(value))
-        #
+                 max_len):
+        self._dir = directory
+        if not os.path.exists(self._dir):
+            os.makedirs(self._dir)
+        train_name = 'ptb.train.txt'
+        # valid_name = 'ptb.valid.txt'
+        # test_name = 'ptb.test.txt'
+        train_path = os.path.join(self._dir, train_name)
+        train_list = self._get_text_list(train_path, min_len=min_len, max_len=max_len)
+        # valid_list = self._get_text_list(valid_path)
+        # test_list = self._get_text_list(test_path)
+        self._init_groups(train_list)
+        self._init_encoder(train_list)
         # Dataset.
         groups = {}
         for key, value in self._groups.items():
             groups[key] = photinia.Dataset(value)
         self._groups = groups
+
+    @staticmethod
+    def _get_text_list(filename, min_len=0, max_len=1000):
+        text_list = []
+        with open(filename, 'r') as f:
+            temp = f.readlines()
+        for text in temp:
+            text = text.split()
+            if min_len < len(text) < max_len:
+                text.append('\n')
+                text_list.append(text)
+        return text_list
 
     def _init_groups(self, lines):
         groups = collections.defaultdict(list)
@@ -149,26 +163,29 @@ class DanmuDataSource(photinia.DataSource):
         self._groups = groups
 
     def _init_encoder(self, lines):
-        chars = set()
+        words = set()
         for text in lines:
-            chars.update(text)
-        chars = list(chars)
-        self._ctoi = {ch: i for i, ch in enumerate(chars)}
-        self._itoc = chars
+            words.update(text)
+        words = list(words)
+        self._wtoi = {word: i for i, word in enumerate(words)}
+        self._itow = words
 
     @property
     def voc_size(self):
-        return len(self._itoc)
+        return len(self._itow)
 
     @property
     def voc(self):
-        return self._itoc
+        return self._itow
 
     def encode(self, text):
         length = len(text)
         mat = np.zeros(shape=(length, self.voc_size), dtype=np.float32)
-        for i, ch in enumerate(text):
-            mat[i][self._ctoi[ch]] = 1.
+        for i, word in enumerate(text):
+            if word in self._wtoi:
+                mat[i][self._wtoi[word]] = 1.
+            else:
+                mat[i][self._wtoi['<unk>']] = 1.
         return mat
 
     def decode(self, mat):
@@ -176,45 +193,54 @@ class DanmuDataSource(photinia.DataSource):
         for i in range(len(mat)):
             row = mat[i]
             index = np.argmax(row)
-            ch = self._itoc[index]
-            if ch == '\n':
+            word = self._itow[index]
+            if word == '\n':
                 break
-            text.append(ch)
-        return ''.join(text)
+            text.append(word)
+        return ' '.join(text)
 
     def next_batch(self, size=0):
         key = np.random.choice(list(self._groups.keys()))
         batch, = self._groups[key].next_batch(size)
-        return np.array([self.encode(text) for text in batch], dtype=np.float32),
+        return np.array([self.encode(text) for text in batch], dtype=np.float32)
 
 
 def main(flags):
-    ds = DanmuDataSource(
-        flags.host,
-        flags.db,
-        flags.coll,
+    # 创建数据源对象
+    ds = PTBData(
+        flags.directory,
         flags.min_len,
-        flags.max_len,
-        flags.max_num
+        flags.max_len
     )
+    # 创建存储词向量的文件夹
+    if not os.path.exists(flags.save):
+        os.makedirs(flags.save)
+    # tensorflow 配置
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as session:
-        model = CharEmb(
-            'CharEmb',
+        # 创建模型对象
+        model = Model(
+            'Model',
             session,
             ds.voc_size,
             flags.emb_size,
             flags.state_size
         ).build()
+        # 获取slot
         train = model.get_slot('train')
         evaluate = model.get_slot('evaluate')
         embedding = model.get_slot('embedding')
+        # 参数初始化
         session.run(tf.global_variables_initializer())
+        # 开始训练
         for i in range(1, flags.nloop + 1):
-            seq, = ds.next_batch(flags.bsize)
+            # 获取一个batch的数据
+            seq = ds.next_batch(flags.bsize)
             loss = train(seq)
+            # 输出损失函数值
             print('loop={}\tloss={}'.format(i, loss))
+            # 输出结果对比原始输入与输出
             if i % 50 == 0:
                 outputs = evaluate(seq)
                 for original, output in zip(seq, outputs):
@@ -223,16 +249,14 @@ def main(flags):
                     print('Original: {}'.format(text0))
                     print('  Output: {}'.format(text))
                     print()
-        voc = ''.join(ds.voc)
-        embs = embedding(ds.encode(voc))
-        with pymongo.MongoClient(flags.host) as conn:
-            coll = conn[flags.db][flags.out_coll]
-            coll.remove()
-            for char, emb in zip(voc, embs):
-                coll.insert_one({
-                    'char': char,
-                    'emb': pickle.dumps(emb)
-                })
+            # 存储每个词的embedding到指定文件
+            if i % flags.interval == 0:
+                emb_dict = {}
+                embs = embedding(ds.encode(ds.voc))
+                for word, emb in zip(ds.voc, embs):
+                    emb_dict[word] = emb
+                with open(os.path.join(flags.save, 'embedding_' + str(i) + '.pkl'), 'wb') as f:
+                    pickle.dump(emb_dict, f)
     return 0
 
 
@@ -240,17 +264,15 @@ if __name__ == '__main__':
     global_flags = gflags.FLAGS
     gflags.DEFINE_boolean('help', False, 'Show this help.')
     gflags.DEFINE_string('gpu', '0', 'Which GPU to use.')
-    gflags.DEFINE_integer('bsize', 100, 'Batch size.')
+    gflags.DEFINE_string('directory', './examples', 'Folder to save the origin data.')
+    gflags.DEFINE_string('save', './examples/embedding', 'Folder to save the word\'s embedding.')
+    gflags.DEFINE_integer('bsize', 50, 'Batch size.')
     gflags.DEFINE_integer('nloop', 20000, 'Max number of loop.')
-    gflags.DEFINE_string('host', 'localhost', 'MongoDB host.')
-    gflags.DEFINE_string('db', 'march', 'Database name.')
-    gflags.DEFINE_string('coll', 'danmus', 'Collection name.')
-    gflags.DEFINE_string('out_coll', 'embeddings', 'Output collection name.')
-    gflags.DEFINE_integer('min_len', 5, 'Min length.')
-    gflags.DEFINE_integer('max_len', 15, 'Max length.')
-    gflags.DEFINE_integer('max_num', 500000, 'Max number of danmus.')
+    gflags.DEFINE_integer('min_len', 2, 'Min length.')
+    gflags.DEFINE_integer('max_len', 40, 'Max length.')
     gflags.DEFINE_integer('emb_size', 100, 'Embedding size.')
     gflags.DEFINE_integer('state_size', 1000, 'State size.')
+    gflags.DEFINE_integer('interval', 1000, 'Interval of save the word\'s embedding.')
     global_flags(sys.argv)
     if global_flags.help:
         print(global_flags.main_module_help())
