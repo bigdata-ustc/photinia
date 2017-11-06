@@ -170,10 +170,6 @@ class Linear(Widget):
     y = wx + b
     """
 
-    # 邻家女孩，或是林家女孩，都是想过却不曾有过记忆
-    # 是那种被隔壁家大姐姐吊打的感觉
-    # 啊～～～变态！！变态！！变态！！巴嘎！变态！！
-
     def __init__(self,
                  name,
                  input_size,
