@@ -43,11 +43,6 @@ class Widget(object):
     This an abstract class which can only be inherited.
     """
 
-    # 千年之后的你会在哪里 身边有怎样风景
-    # 我们的故事并不算美丽 却如此难以忘记
-    # 如果当初勇敢的在一起 会不会不同结局
-    # 你会不会也有千言万语 埋在沉默的梦里
-
     def __init__(self,
                  name=None,
                  build=True):
