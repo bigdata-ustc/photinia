@@ -1342,7 +1342,7 @@ class SoftAttention(Widget):
         # -> (seq_length, batch_size, 1)
         a = activation(a + b) if activation is not None else a + b
         a = tf.tensordot(a, self._omega, ((2,), (0,)))
-        a = tf.nn.softmax(a, dim=1)
+        a = tf.nn.softmax(a, dim=0)
         #
         # (seq_length, batch_size, 1) * (seq_length, batch_size, seq_elem_size)
         # -> (seq_length, batch_size, seq_elem_size)
