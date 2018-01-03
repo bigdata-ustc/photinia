@@ -21,9 +21,9 @@ class Data(Dataset):
         if not os.path.exists(self._dir):
             os.makedirs(self._dir)
         self._source_url = 'http://yann.lecun.com/exdb/mnist/'
-        train_images_name = 'train-images-idx3-ubyte.gz'
+        train_images_name = 'train-im_utils-idx3-ubyte.gz'
         train_labels_name = 'train-labels-idx1-ubyte.gz'
-        test_images_name = 't10k-images-idx3-ubyte.gz'
+        test_images_name = 't10k-im_utils-idx3-ubyte.gz'
         test_labels_name = 't10k-labels-idx1-ubyte.gz'
         self._train_images, self._train_labels = self._get_data(train_images_name, train_labels_name)
         self._test_images, self._test_labels = self._get_data(test_images_name, test_labels_name)

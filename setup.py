@@ -23,5 +23,6 @@ if __name__ == '__main__':
             'Programming Language :: Python :: 3.5'
         ],
         include_package_data=True,
-        zip_safe=True
+        zip_safe=True,
+        install_requires=['numpy', 'scipy', 'tensorflow', 'pymongo', 'Pillow', 'mpi4py']
     )

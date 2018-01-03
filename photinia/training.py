@@ -5,6 +5,8 @@
 @since: 2016-11-11
 """
 
+import collections
+import datetime as dt
 import os
 import pickle
 import re
@@ -13,133 +15,12 @@ import shutil
 import gridfs
 import numpy as np
 import pymongo
+import tensorflow as tf
 
+from . import config
 from . import ops
 from . import widgets
-
-
-class DataSource(object):
-    """DataSource
-    """
-
-    def next_batch(self, size=0):
-        """Get a batch of data.
-        
-        :param size: Batch size. Default is zero, which means extract all data.
-        :return: Tuple of np.array.
-        """
-        raise NotImplementedError()
-
-
-class Dataset(DataSource):
-    """Dataset
-    """
-
-    # “有一种想见不敢见的伤痛，有一种爱还埋藏在我心中，我只能把你放在我的心中”
-    # 她问我：“你想见谁啊？”
-
-    def __init__(self,
-                 *data,
-                 dtype=None):
-        """Construct a dataset.
-        
-        :param data: Tuple of list, np.array or any iterable objects.
-        :param dtype: Data type.
-        """
-        self._num_comp = len(data)
-        if self._num_comp == 0:
-            raise ValueError('At least 1 data object should be given.')
-        self._data = [np.array(mat, dtype=dtype) for mat in data]
-        size = None
-        for mat in self._data:
-            if size is None:
-                size = len(mat)
-                continue
-            if len(mat) != size:
-                raise ValueError('All data components must have the same size.')
-        self._size = size
-        self._start = 0
-        self._loop = 0
-
-    @property
-    def size(self):
-        return self._size
-
-    @property
-    def start(self):
-        return self._start
-
-    @property
-    def loop(self):
-        return self._loop
-
-    def next_batch(self, size=0):
-        batch = self._next_batch(size)
-        if size == 0:
-            return batch
-        real_size = len(batch[0])
-        while real_size < size:
-            batch1 = self._next_batch(size - real_size)
-            batch = tuple(np.concatenate((batch[i], batch1[i]), 0) for i in range(self._num_comp))
-            real_size = len(batch[0])
-        return batch
-
-    def _next_batch(self, size=0):
-        if size <= 0:
-            return self.all()
-        if self._start == 0 and self._loop != 0:
-            self.shuffle()
-        end = self._start + size
-        if end < self._size:
-            batch = tuple(self._data[i][self._start:end].copy() for i in range(self._num_comp))
-            self._start += size
-        else:
-            batch = tuple(self._data[i][self._start:].copy() for i in range(self._num_comp))
-            self._start = 0
-            self._loop += 1
-        return batch
-
-    def shuffle(self, num=3):
-        perm = np.arange(self._size)
-        for _ in range(num):
-            np.random.shuffle(perm)
-        for i in range(self._num_comp):
-            self._data[i] = self._data[i][perm]
-        return self
-
-    def all(self):
-        return self._data
-
-
-class MongoSource(DataSource):
-    """MongoDB data source
-    """
-
-    def __init__(self,
-                 host,
-                 db_name,
-                 coll_name,
-                 fields):
-        #
-        self._host = host
-        self._db_name = db_name
-        self._coll_name = coll_name
-        self._fields = fields.copy()
-        self._conn = pymongo.MongoClient(self._host)
-        self._db = self._conn[db_name]
-        self._coll = self._db[coll_name]
-        super(MongoSource, self).__init__()
-
-    def next_batch(self, size=0):
-        query = self._coll.aggregate([{'$sample': {'size': size}}])
-        batch = tuple([] for _ in self._fields)
-        for doc in query:
-            for index, field in enumerate(self._fields):
-                batch[index].append(doc[field])
-        return batch
-
-    def close(self):
-        self._conn.close()
+from . import data
 
 
 class Slot(object):
@@ -250,27 +131,32 @@ class Slot(object):
         return None
 
 
-class Trainable(widgets.Widget):
-    """Trainable
+class Trainer(widgets.Widget):
+    """Trainer
     """
-
-    # Give me all you got
-    # Don't hold nothing back
-    # Promise you you're gonna need it
-    # Take your best shot I'll just give it back
-    # I'm on the winning side we won't be defeated
-    # I'm not afraid to die cause life is a battle
-    # And fighting me it'll be like fighting shadows
 
     def __init__(self,
                  name,
-                 session,
+                 session=None,
                  build=True):
         if session is None:
-            raise ValueError('Invalid session.')
-        self._session = session
+            tfconfig = tf.ConfigProto()
+            tfconfig.gpu_options.allow_growth = True
+            self._session = tf.Session(config=tfconfig)
+            self._session_provided = False
+        else:
+            if not isinstance(session, tf.Session):
+                raise ValueError('session should be tf.Session.')
+            self._session = session
+            self._session_provided = True
         self._slots = {}
-        super(Trainable, self).__init__(name, build)
+        self._predict_slot = None
+        self._fitters = []
+        super(Trainer, self).__init__(name, build)
+
+    def __del__(self):
+        if not self._session_provided and self._session is not None:
+            self._session.close()
 
     def _build(self):
         """Build the model.
@@ -302,6 +188,15 @@ class Trainable(widgets.Widget):
         )
         self._slots[name] = slot
 
+    def _add_train_slot(self, inputs=None, outputs=None, givens=None, updates=None):
+        self._add_slot(config.NAME_TRAIN_SLOT, inputs, outputs, givens, updates)
+
+    def _add_validate_slot(self, inputs=None, outputs=None, givens=None, updates=None):
+        self._add_slot(config.NAME_VALID_SLOT, inputs, outputs, givens, updates)
+
+    def _add_predict_slot(self, inputs=None, outputs=None, givens=None, updates=None):
+        self._add_slot(config.NAME_PREDICT_SLOT, inputs, outputs, givens, updates)
+
     def get_slot(self, name):
         return self._slots[name] if name in self._slots else None
 
@@ -322,13 +217,262 @@ class Trainable(widgets.Widget):
             var = var_dict[name]
             var.load(value, session=self._session)
 
+    def initialize_global_variables(self):
+        self._session.run(tf.global_variables_initializer())
+
+    def fit(self, max_loop=10000):
+        """Train the model to fit the given dataset.
+
+        :param max_loop: The number of max loop. Default is 10000.
+            Here, "a loop" means train the model with one batch of data.
+        """
+        context = {
+            config.CONTEXT_TRAINER: self,
+            config.CONTEXT_MAX_LOOP: max_loop
+        }
+        for i in range(1, max_loop + 1):
+            context[config.CONTEXT_LOOP] = i
+            for fitter in self._fitters:
+                try:
+                    fitter.fit(i, max_loop, context)
+                except FitterInterrupt:
+                    break
+
+    def add_fitter(self, fitter):
+        self._fitters.append(fitter)
+
+    def add_data_fitter(self,
+                        data_source,
+                        batch_size,
+                        slot_name,
+                        interval=1,
+                        count=1):
+        self.add_fitter(DataFitter(data_source, batch_size, self, slot_name, interval, count))
+
+    def add_data_trainer(self,
+                         data_source,
+                         batch_size,
+                         interval=1,
+                         count=1):
+        self.add_fitter(DataFitter(data_source, batch_size, self, config.NAME_TRAIN_SLOT, interval, count))
+
+    def add_data_validator(self,
+                           data_source,
+                           batch_size,
+                           interval=1,
+                           count=1):
+        self.add_fitter(Validator(data_source, batch_size, self, config.NAME_VALID_SLOT, interval, count))
+
+    def add_screen_logger(self,
+                          log_attr,
+                          value_names=('loss',),
+                          interval=1,
+                          count=1):
+        self.add_fitter(ScreenLogger(log_attr, value_names, interval, count))
+
+    def predict(self, data_batch):
+        if self._predict_slot is None:
+            if config.NAME_PREDICT_SLOT not in self._slots:
+                raise RuntimeError('No predict slot defined.')
+            self._predict_slot = self._slots[config.NAME_PREDICT_SLOT]
+        return self._predict_slot(*data_batch)
+
+
+class FitterInterrupt(BaseException):
+    """Fit process is interrupt by one of the fitters.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+
+class Fitter(object):
+    """Fitter
+    """
+
+    def __init__(self,
+                 interval=1,
+                 count=1):
+        self._interval = interval
+        self._count = count
+
+    def fit(self, i, max_loop, context):
+        if i % self._interval == 0:
+            for _ in range(self._count):
+                self._fit(i, max_loop, context)
+
+    def _fit(self, i, max_loop, context):
+        raise NotImplementedError()
+
+
+class DataFitter(Fitter):
+    """Data fitter
+    """
+
+    def __init__(self,
+                 data_source,
+                 batch_size,
+                 trainer,
+                 slot_name,
+                 interval=1,
+                 count=1):
+        super(DataFitter, self).__init__(interval, count)
+        if not isinstance(data_source, data.DataSource):
+            raise ValueError('data_source should be an instance of training.DataSource.')
+        self._ds = data_source
+        if batch_size < 0:
+            raise ValueError('batch_size should not be negative.')
+        self._batch_size = batch_size
+        if not isinstance(trainer, Trainer):
+            raise ValueError('trainer should be an instance of training.Trainer.')
+        self._trainable = trainer
+        self._slot_name = slot_name
+        self._slot = trainer.get_slot(slot_name)
+
+    def _fit(self, i, max_loop, context):
+        data_batch = self._ds.next_batch(self._batch_size)
+        ret = self._slot(*data_batch)
+        context[self._slot_name] = ret
+
+
+class Validator(DataFitter):
+    """Validator
+    """
+
+    def __init__(self,
+                 data_source,
+                 batch_size,
+                 trainer,
+                 slot_name,
+                 interval=1,
+                 count=1):
+        super(Validator, self).__init__(
+            data_source=data_source,
+            batch_size=batch_size,
+            trainer=trainer,
+            slot_name=slot_name,
+            interval=interval,
+            count=count
+        )
+
+    def _fit(self, i, max_loop, context):
+        ret_list = []
+        data = self._ds.next_batch(0)
+        size = len(data[0])
+        batch_size = self._batch_size
+        for i in range(1, size // batch_size + 1):
+            data_batch = tuple(comp[(i - 1) * batch_size: i * batch_size] for comp in data)
+            ret = self._slot(*data_batch)
+            if not isinstance(ret, (tuple, list)):
+                ret = (ret,)
+            ret_list.append(ret)
+        last_size = size % batch_size
+        if last_size != 0:
+            data_batch = tuple(comp[-last_size:] for comp in data)
+            ret = self._slot(*data_batch)
+            if not isinstance(ret, (tuple, list)):
+                ret = (ret,)
+            ret_list.append(ret)
+        context[self._slot_name] = tuple(comp for comp in np.sum(ret_list, axis=0) / size)
+
+
+class ScreenLogger(Fitter):
+    """Screen logger
+    """
+
+    def __init__(self,
+                 log_attribute,
+                 value_names=('loss',),
+                 interval=1,
+                 count=1):
+        super(ScreenLogger, self).__init__(interval, count)
+        self._log_attribute = log_attribute
+        self._value_names = value_names
+
+    def _fit(self, i, max_loop, context):
+        now = dt.datetime.now()
+        print(now.strftime('[%Y-%m-%d %H:%M:%S '), end='')
+        # loop = context[config.CONTEXT_LOOP] if config.CONTEXT_LOOP in context else '?'
+        # max_loop = context[config.CONTEXT_MAX_LOOP] if config.CONTEXT_MAX_LOOP in context else '?'
+        percentage = '%.2f' % (i / max_loop * 100,)
+        print('%s/%s|%s%%]' % (str(i), str(max_loop), percentage), end='')
+        #
+        values = context[self._log_attribute] if self._log_attribute in context else ()
+        if not isinstance(values, (list, tuple)):
+            values = (values,)
+        for i, name in enumerate(self._value_names):
+            if i < len(values):
+                value = values[i]
+                print('\t%s=%f' % (name, value), end='')
+            else:
+                print('\t%s=?' % (name,), end='')
+        print()
+
+
+class MPIDispatcher(Fitter):
+    """MPI Dispatcher
+
+    This class is used for the distributional training of the model. (Based on MPI).
+    So, the servers should have one of the MPI implementation (e.g., openmpi, mpich) installed.
+    If this fitter is instanced and added to a trainer, the program should be run using the MPI command:
+
+        mpiexec -n {num_processes} python3 {python_file.py}
+    """
+
+    def __init__(self,
+                 sync_interval=2):
+        super(MPIDispatcher, self).__init__(1, 1)
+        from mpi4py import MPI
+        self._sync_interval = sync_interval
+        #
+        self._comm = MPI.COMM_WORLD
+        self._rank = self._comm.Get_rank()
+        self._size = self._comm.Get_size()
+        #
+        # This is very important since we should let the processes to use DIFFERENT GPUs of the same server.
+        # While, if the processes run on different servers, this can cause problems.
+        # TODO: Thus we need to further modify the assign policy to choose the GPU automatically.
+        gpu_list = [int(item) for item in os.environ['CUDA_VISIBLE_DEVICES'].split(',')]
+        gpu = gpu_list[self._rank % len(gpu_list)]
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu)
+
+    def _fit(self, i, max_loop, context):
+        trainer = context[config.CONTEXT_TRAINER]
+        if i == 1:
+            self._init_all(trainer)
+        elif i % self._sync_interval == 0:
+            self._update_all(trainer)
+
+    def _init_all(self, trainer):
+        if self._rank == 0:
+            self._comm.bcast(trainer.parameters, root=0)
+        else:
+            trainer.parameters = self._comm.bcast(None, root=0)
+
+    def _update_all(self, trainer):
+        if self._rank == 0:
+            #
+            # Gather parameters from all processes (include the master itself).
+            # Compute the mean value for each parameter.
+            # Then, broadcast them.
+            param_list = self._comm.gather(trainer.parameters, root=0)
+            new_params = collections.defaultdict(list)
+            for params in param_list:
+                for name, value in params.items():
+                    new_params[name].append(value)
+            new_params = {key: np.mean(value_list, axis=0) for key, value_list in new_params.items()}
+            new_params = trainer.parameters = self._comm.bcast(new_params, root=0)
+        else:
+            self._comm.gather(trainer.parameters, root=0)
+            new_params = self._comm.bcast(None, root=0)
+        #
+        # Update the parameters to the same version for all processes.
+        trainer.parameters = new_params
+
 
 class ModelDumper(object):
     """ModelDumper
     """
-
-    # 你们得救在乎回归安息
-    # 你们得力在乎平静安稳
 
     def dump(self, name, model):
         """Dump the model to somewhere (file, DB, ...) using the given name.
@@ -553,7 +697,3 @@ class GradientClipping(OptimizerWrapper):
     @property
     def grad_norm(self):
         return self._grad_norm
-
-
-if __name__ == '__main__':
-    exit()

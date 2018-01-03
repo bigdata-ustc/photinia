@@ -17,7 +17,7 @@ import numpy as np
 from examples import mnist
 
 
-class Model(photinia.Trainable):
+class Model(photinia.Trainer):
     """模型定义
     """
 
@@ -39,7 +39,7 @@ class Model(photinia.Trainable):
 
     def _build(self):
         # 网络模块定义：线性层 --- build
-        self._lin = photinia.Linear('LINEAR', self._input_size, self._num_classes).build()
+        self._lin = photinia.Linear('LINEAR', self._input_size, self._num_classes)
         # 输入定义
         x = tf.placeholder(dtype=photinia.D_TYPE, shape=[None, self._input_size])
         y_ = tf.placeholder(dtype=photinia.D_TYPE, shape=[None, self._num_classes])
@@ -95,7 +95,7 @@ def main(flags):
     # 开始session
     with tf.Session(config=config) as session:
         # 创建模型对象
-        model = Model('Model', session, flags.input_size, flags.num_classes).build()
+        model = Model('Model', session, flags.input_size, flags.num_classes)
         # 获取slot
         train = model.get_slot('train')
         predict = model.get_slot('predict')

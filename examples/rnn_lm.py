@@ -18,7 +18,7 @@ import photinia
 import pickle
 
 
-class Model(photinia.Trainable):
+class Model(photinia.Trainer):
     """模型定义
     """
 
@@ -39,13 +39,13 @@ class Model(photinia.Trainable):
         self._voc_size = voc_size
         self._emb_size = emb_size
         self._state_size = state_size
-        photinia.Trainable.__init__(self, name, session)
+        photinia.Trainer.__init__(self, name, session)
 
     def _build(self):
         # 网络模块定义 --- build
-        self._emb = photinia.Linear('EMB', self._voc_size, self._emb_size).build()
-        self._cell = photinia.GRUCell('CELL', self._emb_size, self._state_size).build()
-        self._lin = photinia.Linear('LIN', self._state_size, self._voc_size).build()
+        self._emb = photinia.Linear('EMB', self._voc_size, self._emb_size)
+        self._cell = photinia.GRUCell('CELL', self._emb_size, self._state_size)
+        self._lin = photinia.Linear('LIN', self._state_size, self._voc_size)
         # 输入定义
         seq = tf.placeholder(
             shape=(None, None, self._voc_size),
@@ -226,7 +226,7 @@ def main(flags):
             ds.voc_size,
             flags.emb_size,
             flags.state_size
-        ).build()
+        )
         # 获取slot
         train = model.get_slot('train')
         evaluate = model.get_slot('evaluate')

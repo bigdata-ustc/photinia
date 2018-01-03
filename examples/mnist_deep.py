@@ -16,7 +16,7 @@ import tensorflow as tf
 from examples import mnist
 
 
-class Model(photinia.Trainable):
+class Model(photinia.Trainer):
     """模型定义
     """
 
@@ -56,8 +56,8 @@ class Model(photinia.Trainable):
                                  activation=tf.nn.relu,
                                  with_batch_norm=False
                                  ).build()
-        self._lin1 = photinia.Linear('LINEAR1', self._cnn.flat_size, self._feature_size).build()
-        self._lin2 = photinia.Linear('LINEAR2', self._feature_size, self._num_classes).build()
+        self._lin1 = photinia.Linear('LINEAR1', self._cnn.flat_size, self._feature_size)
+        self._lin2 = photinia.Linear('LINEAR2', self._feature_size, self._num_classes)
         # dropout参数
         keep_prob = tf.placeholder(dtype=photinia.D_TYPE)
         # 输入
@@ -102,7 +102,7 @@ def main(flags):
                       flags.width,
                       flags.depth,
                       flags.feature_size,
-                      flags.num_classes).build()
+                      flags.num_classes)
         # 获取slot
         train = model.get_slot('train')
         predict = model.get_slot('predict')

@@ -4,10 +4,9 @@
 @author: xi
 """
 
+import argparse
 import os
-import sys
 
-import gflags
 import tensorflow as tf
 
 
@@ -17,7 +16,7 @@ import tensorflow as tf
 #
 # TODO: Data source definition here.
 
-def main(flags):
+def main(args):
     #
     # TODO: Any code here.
     config = tf.ConfigProto()
@@ -27,18 +26,14 @@ def main(flags):
         #
         # TODO: Any code here.
         pass
-    return 0
+    raise SystemExit(0)
 
 
 if __name__ == '__main__':
-    global_flags = gflags.FLAGS
-    gflags.DEFINE_boolean('help', False, 'Show this help.')
-    gflags.DEFINE_string('gpu', '0', 'Which GPU to use.')
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-g', '--gpu', default='0', help='Choose which GPU to use.')
     #
-    # TODO: Other FLAGS here.
-    global_flags(sys.argv)
-    if global_flags.help:
-        print(global_flags.main_module_help())
-        exit(0)
-    os.environ['CUDA_VISIBLE_DEVICES'] = global_flags.gpu
-    exit(main(global_flags))
+    # TODO: Define more args here.
+    args = parser.parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+    main(args)
