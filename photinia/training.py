@@ -8,49 +8,35 @@
 import collections
 import datetime as dt
 import os
-import pickle
-import re
-import shutil
 
-import gridfs
 import numpy as np
-import pymongo
-import tensorflow as tf
 
-from . import config
-from . import ops
-from . import widgets
+from . import settings
 from . import data
+from . import operations
+from . import widgets
 
 
 class Slot(object):
-    """Slot
-    """
-
-    # We humans are more concerned with having than with being.
 
     def __init__(self,
-                 session,
-                 outputs=None,
+                 # session,
                  inputs=None,
+                 outputs=None,
                  updates=None,
-                 givens=None):
-        #
-        # Session.
-        if session is None:
-            raise ValueError('Invalid session.')
-        self._session = session
-        #
-        # Outputs.
-        if outputs is None:
-            outputs = ()
-        if not isinstance(outputs, (tuple, list)):
-            outputs = (outputs,)
-            self._single_output = True
-        else:
-            self._single_output = False
-        self._outputs = outputs
-        self._output_size = len(outputs)
+                 givens=None,
+                 callbacks=None):
+        """Create a Slot with the given params.
+
+        :param inputs: Tensor or list(tuple) of Tensors.
+        :param outputs: Tensor, list(tuple) of Tensors or Tensor dict.
+        :param updates: Operator or list(tuple) of Operators.
+        :param givens: Tensor dict.
+        """
+        # if session is None:
+        #     raise ValueError('Invalid session.')
+        # self._session = session
+        self._session = settings.get_session()
         #
         # Inputs.
         if inputs is None:
@@ -58,6 +44,14 @@ class Slot(object):
         if not isinstance(inputs, (tuple, list)):
             inputs = (inputs,)
         self._inputs = inputs
+        #
+        # Outputs.
+        if outputs is None:
+            outputs = ()
+        if not isinstance(outputs, (tuple, list)) \
+                and not isinstance(outputs, (dict, collections.OrderedDict)):
+            outputs = (outputs,)
+        self._outputs = outputs
         #
         # Updates.
         if updates is None:
@@ -73,62 +67,50 @@ class Slot(object):
             raise ValueError('Givens must be dict.')
         self._givens = givens
         #
+        # Callbacks.
+        if callbacks is None:
+            callbacks = ()
+        if not isinstance(callbacks, (tuple, list)):
+            callbacks = (callbacks,)
+        self._callbacks = callbacks
+        #
         self._feed_dict = givens.copy()
-        self._runnable = outputs + updates
-        if len(self._runnable) == 0:
+        self._fetches = (outputs, updates)
+        if len(outputs) == 0 and len(updates) == 0:
             raise ValueError('At least one output or update should be set.')
 
     @property
     def outputs(self):
-        return self._outputs if isinstance(self._outputs, (tuple, list)) else (self._outputs,)
-
-    @property
-    def output(self):
-        if isinstance(self._outputs, (tuple, list)):
-            assert len(self._outputs) == 1
-            return self._outputs[0]
-        else:
-            return self._outputs
+        return self._outputs
 
     @property
     def inputs(self):
         return self._inputs
 
     @property
-    def input(self):
-        assert len(self._inputs) == 1
-        return self._inputs[0]
-
-    @property
     def updates(self):
         return self._updates
-
-    @property
-    def update(self):
-        assert len(self._updates) == 1
-        return self._updates[0]
 
     @property
     def givens(self):
         return self._givens
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args):
         #
         # Check input length.
         if len(args) != len(self._inputs):
             print(len(args), len(self._inputs))
             raise ValueError('The count of parameters is not match the inputs.')
         #
-        # Run graph.
+        # Make "feed_dict".
         for index, placeholder in enumerate(self._inputs):
             self._feed_dict[placeholder] = args[index]
-        outputs = self._session.run(self._runnable, feed_dict=self._feed_dict)
-        if self._output_size != 0:
-            if self._single_output:
-                return outputs[0]
-            else:
-                return outputs[:self._output_size]
-        return None
+        #
+        # Run the graph on the session.
+        ret = self._session.run(fetches=self._fetches, feed_dict=self._feed_dict)[0]
+        for callback in self._callbacks:
+            callback(ret)
+        return ret
 
 
 class Trainer(widgets.Widget):
@@ -137,26 +119,26 @@ class Trainer(widgets.Widget):
 
     def __init__(self,
                  name,
-                 session=None,
+                 # session=None,
                  build=True):
-        if session is None:
-            tfconfig = tf.ConfigProto()
-            tfconfig.gpu_options.allow_growth = True
-            self._session = tf.Session(config=tfconfig)
-            self._session_provided = False
-        else:
-            if not isinstance(session, tf.Session):
-                raise ValueError('session should be tf.Session.')
-            self._session = session
-            self._session_provided = True
+        # if session is None:
+        #     tfconfig = tf.ConfigProto()
+        #     tfconfig.gpu_options.allow_growth = True
+        #     self._session = tf.Session(config=tfconfig)
+        #     self._session_provided = False
+        # else:
+        #     if not isinstance(session, tf.Session):
+        #         raise ValueError('session should be tf.Session.')
+        #     self._session = session
+        #     self._session_provided = True
         self._slots = {}
         self._predict_slot = None
-        self._fitters = []
+        self._fitters = collections.deque()
         super(Trainer, self).__init__(name, build)
 
-    def __del__(self):
-        if not self._session_provided and self._session is not None:
-            self._session.close()
+    # def __del__(self):
+    #     if not self._session_provided and self._session is not None:
+    #         self._session.close()
 
     def _build(self):
         """Build the model.
@@ -180,45 +162,25 @@ class Trainer(widgets.Widget):
         if name in self._slots:
             raise ValueError('Slot {} exists.'.format(name))
         slot = Slot(
-            session=self._session,
-            outputs=outputs,
+            # session=self._session,
             inputs=inputs,
+            outputs=outputs,
             updates=updates,
             givens=givens
         )
         self._slots[name] = slot
 
     def _add_train_slot(self, inputs=None, outputs=None, givens=None, updates=None):
-        self._add_slot(config.NAME_TRAIN_SLOT, inputs, outputs, givens, updates)
+        self._add_slot(settings.TRAIN, inputs, outputs, givens, updates)
 
     def _add_validate_slot(self, inputs=None, outputs=None, givens=None, updates=None):
-        self._add_slot(config.NAME_VALID_SLOT, inputs, outputs, givens, updates)
+        self._add_slot(settings.VALIDATE, inputs, outputs, givens, updates)
 
     def _add_predict_slot(self, inputs=None, outputs=None, givens=None, updates=None):
-        self._add_slot(config.NAME_PREDICT_SLOT, inputs, outputs, givens, updates)
+        self._add_slot(settings.PREDICT, inputs, outputs, givens, updates)
 
     def get_slot(self, name):
         return self._slots[name] if name in self._slots else None
-
-    @property
-    def parameters(self):
-        var_list = self.trainable_variables()
-        param_dict = {var.name: self._session.run(var) for var in var_list}
-        return param_dict
-
-    @parameters.setter
-    def parameters(self, param_dict):
-        var_list = self.trainable_variables()
-        var_dict = {var.name: var for var in var_list}
-        for name, value in param_dict.items():
-            if name not in var_dict:
-                print('Parameter {} is not in this model.'.format(name))
-                continue
-            var = var_dict[name]
-            var.load(value, session=self._session)
-
-    def initialize_global_variables(self):
-        self._session.run(tf.global_variables_initializer())
 
     def fit(self, max_loop=10000):
         """Train the model to fit the given dataset.
@@ -227,11 +189,11 @@ class Trainer(widgets.Widget):
             Here, "a loop" means train the model with one batch of data.
         """
         context = {
-            config.CONTEXT_TRAINER: self,
-            config.CONTEXT_MAX_LOOP: max_loop
+            settings.CONTEXT_TRAINER: self,
+            settings.CONTEXT_MAX_LOOP: max_loop
         }
         for i in range(1, max_loop + 1):
-            context[config.CONTEXT_LOOP] = i
+            context[settings.CONTEXT_LOOP] = i
             for fitter in self._fitters:
                 try:
                     fitter.fit(i, max_loop, context)
@@ -241,40 +203,26 @@ class Trainer(widgets.Widget):
     def add_fitter(self, fitter):
         self._fitters.append(fitter)
 
-    def add_data_fitter(self,
-                        data_source,
-                        batch_size,
-                        slot_name,
-                        interval=1,
-                        count=1):
+    def clear_fitters(self):
+        self._fitters.clear()
+
+    def add_data_fitter(self, data_source, batch_size, slot_name, interval=1, count=1):
         self.add_fitter(DataFitter(data_source, batch_size, self, slot_name, interval, count))
 
-    def add_data_trainer(self,
-                         data_source,
-                         batch_size,
-                         interval=1,
-                         count=1):
-        self.add_fitter(DataFitter(data_source, batch_size, self, config.NAME_TRAIN_SLOT, interval, count))
+    def add_data_trainer(self, data_source, batch_size, interval=1, count=1):
+        self.add_fitter(DataFitter(data_source, batch_size, self, settings.TRAIN, interval, count))
 
-    def add_data_validator(self,
-                           data_source,
-                           batch_size,
-                           interval=1,
-                           count=1):
-        self.add_fitter(Validator(data_source, batch_size, self, config.NAME_VALID_SLOT, interval, count))
+    def add_data_validator(self, data_source, batch_size, interval=1, count=1):
+        self.add_fitter(Validator(data_source, batch_size, self, settings.VALIDATE, interval, count))
 
-    def add_screen_logger(self,
-                          log_attr,
-                          value_names=('loss',),
-                          interval=1,
-                          count=1):
-        self.add_fitter(ScreenLogger(log_attr, value_names, interval, count))
+    def add_screen_logger(self, log_attr, value_names=('loss',), message=None, interval=1, count=1):
+        self.add_fitter(ScreenLogger(log_attr, value_names, message, interval, count))
 
     def predict(self, data_batch):
         if self._predict_slot is None:
-            if config.NAME_PREDICT_SLOT not in self._slots:
+            if settings.PREDICT not in self._slots:
                 raise RuntimeError('No predict slot defined.')
-            self._predict_slot = self._slots[config.NAME_PREDICT_SLOT]
+            self._predict_slot = self._slots[settings.PREDICT]
         return self._predict_slot(*data_batch)
 
 
@@ -357,23 +305,55 @@ class Validator(DataFitter):
 
     def _fit(self, i, max_loop, context):
         ret_list = []
-        data = self._ds.next_batch(0)
-        size = len(data[0])
-        batch_size = self._batch_size
-        for i in range(1, size // batch_size + 1):
-            data_batch = tuple(comp[(i - 1) * batch_size: i * batch_size] for comp in data)
-            ret = self._slot(*data_batch)
-            if not isinstance(ret, (tuple, list)):
-                ret = (ret,)
-            ret_list.append(ret)
-        last_size = size % batch_size
-        if last_size != 0:
-            data_batch = tuple(comp[-last_size:] for comp in data)
-            ret = self._slot(*data_batch)
-            if not isinstance(ret, (tuple, list)):
-                ret = (ret,)
-            ret_list.append(ret)
-        context[self._slot_name] = tuple(comp for comp in np.sum(ret_list, axis=0) / size)
+        ret_dict = collections.defaultdict(float)
+        next_batch = self._ds.__getattribute__('next_batch_one_pass')
+        if next_batch is None:
+            data_batch = self._ds.next_batch(0)
+            size = len(data_batch[0])
+            batch_size = self._batch_size
+            for i in range(1, size // batch_size + 1):
+                data_batch = tuple(comp[(i - 1) * batch_size: i * batch_size] for comp in data_batch)
+                ret = self._slot(*data_batch)
+                if isinstance(ret, (tuple, list)):
+                    ret_list.append(ret)
+                elif isinstance(ret, (dict, collections.OrderedDict)):
+                    for name, value in ret.items():
+                        ret_dict[name] += value
+                else:
+                    # Should not be reached, since Slot ALWAYS returns tuple or dict.
+                    raise RuntimeError('Invalid Slot outputs type.')
+            last_size = size % batch_size
+            if last_size != 0:
+                data_batch = tuple(comp[-last_size:] for comp in data_batch)
+                ret = self._slot(*data_batch)
+                if isinstance(ret, (tuple, list)):
+                    ret_list.append(ret)
+                elif isinstance(ret, (dict, collections.OrderedDict)):
+                    for name, value in ret.items():
+                        ret_dict[name] += value
+                else:
+                    # Should not be reached, since Slot ALWAYS returns tuple or dict.
+                    raise RuntimeError('Invalid Slot outputs type.')
+        else:
+            size = 0
+            while True:
+                data_batch = next_batch(self._batch_size)
+                if data_batch is None:
+                    break
+                size += len(data_batch[0])
+                ret = self._slot(*data_batch)
+                if isinstance(ret, (tuple, list)):
+                    ret_list.append(ret)
+                elif isinstance(ret, (dict, collections.OrderedDict)):
+                    for name, value in ret.items():
+                        ret_dict[name] += value
+                else:
+                    # Should not be reached, since Slot ALWAYS returns tuple or dict.
+                    raise RuntimeError('Invalid Slot outputs type.')
+        if len(ret_list) != 0:
+            context[self._slot_name] = tuple(comp for comp in np.sum(ret_list, axis=0) / size)
+        else:
+            context[self._slot_name] = {name: value / size for name, value in ret_dict.items()}
 
 
 class ScreenLogger(Fitter):
@@ -381,31 +361,40 @@ class ScreenLogger(Fitter):
     """
 
     def __init__(self,
-                 log_attribute,
+                 context,
                  value_names=('loss',),
+                 message=None,
                  interval=1,
                  count=1):
         super(ScreenLogger, self).__init__(interval, count)
-        self._log_attribute = log_attribute
+        self._context = context
         self._value_names = value_names
+        self._message = message
 
     def _fit(self, i, max_loop, context):
         now = dt.datetime.now()
         print(now.strftime('[%Y-%m-%d %H:%M:%S '), end='')
-        # loop = context[config.CONTEXT_LOOP] if config.CONTEXT_LOOP in context else '?'
-        # max_loop = context[config.CONTEXT_MAX_LOOP] if config.CONTEXT_MAX_LOOP in context else '?'
         percentage = '%.2f' % (i / max_loop * 100,)
         print('%s/%s|%s%%]' % (str(i), str(max_loop), percentage), end='')
         #
-        values = context[self._log_attribute] if self._log_attribute in context else ()
-        if not isinstance(values, (list, tuple)):
-            values = (values,)
-        for i, name in enumerate(self._value_names):
-            if i < len(values):
-                value = values[i]
-                print('\t%s=%f' % (name, value), end='')
-            else:
-                print('\t%s=?' % (name,), end='')
+        if self._message is not None:
+            print('\t' + str(self._message), end='')
+        #
+        values = context[self._context] if self._context in context else ()
+        if isinstance(values, (tuple, list)):
+            for i, name in enumerate(self._value_names):
+                if i < len(values):
+                    value = values[i]
+                    print('\t%s=%f' % (name, value), end='')
+                else:
+                    print('\t%s=?' % (name,), end='')
+        elif isinstance(values, (dict, collections.OrderedDict)):
+            for name in self._value_names:
+                if name in values:
+                    value = values[name]
+                    print('\t%s=%f' % (name, value), end='')
+                else:
+                    print('\t%s=?' % (name,), end='')
         print()
 
 
@@ -437,7 +426,7 @@ class MPIDispatcher(Fitter):
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu)
 
     def _fit(self, i, max_loop, context):
-        trainer = context[config.CONTEXT_TRAINER]
+        trainer = context[settings.CONTEXT_TRAINER]
         if i == 1:
             self._init_all(trainer)
         elif i % self._sync_interval == 0:
@@ -468,187 +457,6 @@ class MPIDispatcher(Fitter):
         #
         # Update the parameters to the same version for all processes.
         trainer.parameters = new_params
-
-
-class ModelDumper(object):
-    """ModelDumper
-    """
-
-    def dump(self, name, model):
-        """Dump the model to somewhere (file, DB, ...) using the given name.
-
-        :param name: The output name. (Not the model name. Note that the output is just one instance of the model.)
-        :param model: The model to be dumped.
-        """
-        param_dict = model.parameters
-        self._dump(name, param_dict)
-
-    def _dump(self, name, param_dict):
-        raise NotImplementedError
-
-    def load(self, name, model, alias_list=None):
-        param_dict = self._load(name)
-        if alias_list:
-            new_dict = {}
-            for key, value in param_dict.items():
-                for src, dst in alias_list:
-                    if not key.startswith(src):
-                        continue
-                    print(key)
-                    if isinstance(dst, widgets.Widget):
-                        dst = dst.prefix()
-                    key, _ = re.subn('^{}'.format(src), dst, key)
-                    new_dict[key] = value
-            param_dict = new_dict
-        model.parameters = param_dict
-
-    def _load(self, name):
-        raise NotImplementedError
-
-
-class FileDumper(ModelDumper):
-    """File Dumper
-    """
-
-    def __init__(self,
-                 output_dir):
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
-        self._output_dir = output_dir
-        super(FileDumper, self).__init__()
-
-    @property
-    def output_dir(self):
-        return self._output_dir
-
-    def clear(self):
-        if os.path.exists(self._output_dir):
-            shutil.rmtree(self._output_dir)
-            os.mkdir(self._output_dir)
-
-    def _dump(self, name, param_dict):
-        model_file = os.path.join(self._output_dir, name)
-        with open(model_file, 'wb') as f:
-            pickle.dump(param_dict, f)
-
-    def _load(self, name):
-        param_file = os.path.join(self._output_dir, name)
-        with open(param_file, 'rb') as f:
-            return pickle.load(f)
-
-
-class TreeDumper(FileDumper):
-    """Tree Dumper
-
-    Dump a model into a directory as a tree form.
-    For example, a model with parameters {model/h1/b:0, model/h1/w:0} will be dumped in the following form:
-    model/
-    ....h1/
-    ........w.0
-    ........b.0
-    """
-
-    def __init__(self,
-                 output_dir):
-        super(TreeDumper, self).__init__(output_dir)
-
-    def _dump(self, name, param_dict):
-        model_dir = os.path.join(self._output_dir, name)
-        if os.path.exists(model_dir):
-            shutil.rmtree(model_dir)
-        os.mkdir(model_dir)
-        for path, value in param_dict.items():
-            param_dir, _ = os.path.split(path)
-            param_dir = os.path.join(model_dir, param_dir)
-            param_file = os.path.join(model_dir, path)
-            param_file = TreeDumper._escape(param_file)
-            if not os.path.exists(param_dir):
-                os.makedirs(param_dir)
-            with open(param_file, 'wb') as f:
-                pickle.dump(value, f)
-
-    @staticmethod
-    def _escape(path):
-        path = list(path)
-        for i in range(len(path) - 1, -1, -1):
-            ch = path[i]
-            if ch == os.sep:
-                break
-            if ch == ':':
-                path[i] = '.'
-        return ''.join(path)
-
-    def _load(self, name):
-        model_dir = os.path.join(self._output_dir, name)
-        if not os.path.exists(model_dir):
-            raise FileNotFoundError()
-        param_dict = {}
-        for path in os.listdir(model_dir):
-            TreeDumper._load_tree(model_dir, path, param_dict)
-        return param_dict
-
-    @staticmethod
-    def _load_tree(model_dir, path, param_dict):
-        real_path = os.path.join(model_dir, path)
-        if os.path.isdir(real_path):
-            for subpath in os.listdir(real_path):
-                subpath = os.path.join(path, subpath)
-                TreeDumper._load_tree(model_dir, subpath, param_dict)
-        elif os.path.isfile(real_path):
-            path = TreeDumper._unescape(path)
-            with open(real_path, 'rb') as f:
-                value = pickle.load(f)
-                param_dict[path] = value
-
-    @staticmethod
-    def _unescape(path):
-        path = list(path)
-        for i in range(len(path) - 1, -1, -1):
-            ch = path[i]
-            if ch == os.sep:
-                break
-            if ch == '.':
-                path[i] = ':'
-        return ''.join(path)
-
-
-class MongoDumper(ModelDumper):
-    """MongoDB Model Dumper
-    """
-
-    def __init__(self, host, db_name, coll='models'):
-        self._host = host
-        self._db_name = db_name
-        self._coll = coll
-        super(MongoDumper, self).__init__()
-
-    def clear(self):
-        with pymongo.MongoClient(self._host) as conn:
-            db = conn[self._db_name]
-            coll1 = db[self._coll + '.files']
-            coll2 = db[self._coll + '.chunks']
-            coll1.remove()
-            coll2.remove()
-
-    def _dump(self, name, param_dict, **kwargs):
-        with pymongo.MongoClient(self._host) as conn:
-            db = conn[self._db_name]
-            fs = gridfs.GridFS(db, collection=self._coll)
-            if fs.exists(name):
-                fs.delete(name)
-            with fs.new_file(_id=name, **kwargs) as f:
-                pickle.dump(param_dict, f)
-
-    def _load(self, name):
-        with pymongo.MongoClient(self._host) as conn:
-            db = conn[self._db_name]
-            fs = gridfs.GridFS(db, collection=self._coll)
-            f = fs.find_one({'_id': name})
-            if f is None:
-                return None
-            with f:
-                param_dict = pickle.load(f)
-        return param_dict
 
 
 class OptimizerWrapper(object):
@@ -685,7 +493,7 @@ class GradientClipping(OptimizerWrapper):
         return self._max_norm
 
     def _process_gradients(self, pair_list):
-        pair_list, raw_grad, grad = ops.clip_gradient(pair_list, self._max_norm)
+        pair_list, raw_grad, grad = operations.clip_gradient(pair_list, self._max_norm)
         self._raw_grad_norm = raw_grad
         self._grad_norm = grad
         return pair_list

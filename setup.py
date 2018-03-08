@@ -8,13 +8,18 @@ if __name__ == '__main__':
         long_description = file.read()
     setup(
         name='photinia',
-        packages=['photinia'],
-        version='0.1.20171018',
+        packages=[
+            'photinia',
+            'photinia.utils',
+            'photinia.apps',
+            'photinia.testing'
+        ],
+        version='0.2.3',
         keywords=('deep learning', 'neural network'),
         description='Build deep learning models quickly for scientists in an object-oriented way.',
         long_description=long_description,
         license='Free',
-        author='dark_lab502',
+        author='darklab_502',
         author_email='gylv@mail.ustc.edu.cn',
         url='https://github.com/XoriieInpottn/photinia',
         platforms='any',
@@ -24,5 +29,5 @@ if __name__ == '__main__':
         ],
         include_package_data=True,
         zip_safe=True,
-        install_requires=['numpy', 'scipy', 'tensorflow', 'pymongo', 'Pillow', 'mpi4py']
+        install_requires=['numpy', 'scipy', 'pymongo', 'Pillow']
     )

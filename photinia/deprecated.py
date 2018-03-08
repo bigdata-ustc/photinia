@@ -4,10 +4,10 @@ import warnings
 
 import tensorflow as tf
 
-from . import config
+from . import settings
 from . import initializers
 from . import widgets
-from . import ops
+from . import operations
 from . import training
 
 
@@ -70,14 +70,14 @@ class Convolutional(widgets.Widget):
                     self._output_depth
                 )
             ),
-            dtype=config.D_TYPE,
+            dtype=settings.D_TYPE,
             name='w'
         )
         self._b = tf.Variable(
             self._bias_initializer.build(
                 shape=(self._output_depth,)
             ),
-            dtype=config.D_TYPE,
+            dtype=settings.D_TYPE,
             name='b'
         )
 
@@ -180,14 +180,14 @@ class ConvPool(widgets.Widget):
                     self._output_depth
                 )
             ),
-            dtype=config.D_TYPE,
+            dtype=settings.D_TYPE,
             name='w'
         )
         self._b = tf.Variable(
             self._bias_initializer.build(
                 shape=(self._output_depth,)
             ),
-            dtype=config.D_TYPE,
+            dtype=settings.D_TYPE,
             name='b'
         )
 
@@ -242,7 +242,7 @@ class CNN(widgets.Widget):
                  input_width,
                  input_depth,
                  layer_shapes,
-                 activation=ops.lrelu,
+                 activation=operations.lrelu,
                  kernel_initializer=initializers.LecunNormal(),
                  bias_initializer=initializers.Zeros(),
                  with_batch_norm=True,
@@ -424,14 +424,14 @@ class ConvTrans(widgets.Widget):
                     self._input_depth
                 )
             ),
-            dtype=config.D_TYPE,
+            dtype=settings.D_TYPE,
             name='w'
         )
         self._b = tf.Variable(
             self._bias_initializer.build(
                 shape=(self._output_depth,)
             ),
-            dtype=config.D_TYPE,
+            dtype=settings.D_TYPE,
             name='b'
         )
 
@@ -479,7 +479,7 @@ class TransCNN(widgets.Widget):
                  init_width,
                  init_depth,
                  layer_shapes,
-                 activation=ops.lrelu,
+                 activation=operations.lrelu,
                  kernel_initializer=initializers.LecunNormal(),
                  bias_initializer=initializers.Zeros(),
                  with_batch_norm=True):

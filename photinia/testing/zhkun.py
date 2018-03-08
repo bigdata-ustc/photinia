@@ -10,10 +10,12 @@ import tensorflow as tf
 import photinia as ph
 
 
-# sequential co-attention method
 class SeqCoAttention(ph.Widget):
     """
     sequential co-attention模块，
+    H_i = tanh(W_x*x_i + W_g1*g1 + W_g2*g2)
+    alpha_i = softmax(w^T*H_i)
+    \hat(x) = sum(alpha_i*x_i)
     输入：处理好的premise, hypothesis, image的表示
           premise: [seq_len, batch_size, emb_size]
           hypothesis: [seq_len, batch_size, emb_size]
@@ -23,12 +25,12 @@ class SeqCoAttention(ph.Widget):
     输出：三个attention表示的结果，为三个向量[batch_size, state_size]
     """
 
-    def __init__(self, name, seq_len, vec_size, img_len, img_size, state_size):
-        self._seq_len = seq_len
+    def __init__(self, name, vec_size, img_size, state_size, keep_prob, is_train=False):
         self._vec_size = vec_size
-        self._img_len = img_len
         self._img_size = img_size
         self._state_size = state_size
+        self._keep_prob = keep_prob
+        self._is_train = is_train
         super(SeqCoAttention, self).__init__(name)
 
     def _build(self):
@@ -92,7 +94,7 @@ class SeqCoAttention(ph.Widget):
         self._wg52 = tf.Variable(name='wg52', dtype=ph.D_TYPE, initial_value=v_init_value)
         self._ww5 = tf.Variable(name='ww5', dtype=ph.D_TYPE, initial_value=u_init_value)
 
-    def _setup(self, seqA, img, seqB):
+    def _setup(self, seqa, img, seqb):
         """
         模型在这块做了修改，首先处理的是image的信息
         :param seqA: [seq_len, batch_size, vec_size]
@@ -100,19 +102,23 @@ class SeqCoAttention(ph.Widget):
         :param seqB: [seq_len, batch_size, vec_size]
         :return: attentioned seqA, attentioned img, attentioned seqB, shape=[batch_size, vec_size/img_size]
         """
+        img_drop = dropout(img, self._keep_prob, self._is_train)
+        seqa_drop = dropout(seqa, self._keep_prob, self._is_train)
+        seqb_drop = dropout(seqb, self._keep_prob, self._is_train)
+
         # stage 1
-        img_ = self._calAttention([self._wx1, self._ww1], img, 1)
+        img_ = self._calAttention([self._wx1, self._ww1], img_drop, 1)
         # stage 2
-        seqA_ = self._calAttention([self._wx2, self._wg21, self._ww2], [seqA, img_], 2)
+        seqA_ = self._calAttention([self._wx2, self._wg21, self._ww2], [seqa_drop, img_], 2)
         # stage 3
         atten_seqB = self._calAttention([self._wx3, self._wg31, self._wg32, self._ww3],
-                                        [seqB, seqA_, img_], 3)
+                                        [seqb_drop, seqA_, img_], 3)
         # stage 4
         atten_img = self._calAttention([self._wx4, self._wg41, self._wg42, self._ww4],
-                                       [img, atten_seqB, seqA_], 4)
+                                       [img_drop, atten_seqB, seqA_], 4)
         # stage 5
         atten_seqA = self._calAttention([self._wx5, self._wg51, self._wg52, self._ww5],
-                                        [seqA, atten_seqB, atten_img], 5)
+                                        [seqa_drop, atten_seqB, atten_img], 5)
 
         result = {'atten_seqA': atten_seqA, 'atten_img': atten_img, 'atten_seqB': atten_seqB}
         return result
@@ -123,61 +129,35 @@ class SeqCoAttention(ph.Widget):
         # stage 1:
         if stage == 1:
             target = infors
-            img = tf.reshape(infors, [-1, self._img_size])
+            # img = tf.reshape(infors, [-1, self._img_size])
             wx, ww = param
-            # shape = [img_len*batch_size, state_size]
-            tmp1 = tf.tanh(tf.matmul(img, wx))
+            # shape = [img_len, batch_size, state_size]
+            tmp1 = tf.nn.tanh(tf.tensordot(target, wx, [[-1], [0]]))
 
-            attentioned = self._comm(target, tmp1, ww, self._img_len)
+            attentioned = self._comm(target, tmp1, ww)
             return attentioned
 
         # stage 2:
         elif stage == 2:
             target, img = infors
-            # seq.shape=[seq_len*batch_size, vec_size]
-            seq = tf.reshape(target, [-1, self._vec_size])
             wx, wg1, ww = param
 
-            # shape=[seq_len*batch_size, state_size]
-            tmp1 = tf.matmul(seq, wx)
+            tmp1 = tf.tensordot(target, wx, axes=[[2], [0]])
 
-            # attentioned img, shape=[seq_len*batch_size, state_size]
-            tmp2 = self._supported(img, wg1, self._seq_len, self._state_size)
+            mid_m = tf.nn.tanh(tmp1 + tf.matmul(img, wg1))
 
-            mid_m = tf.tanh(tmp1 + tmp2)
-
-            attentioned = self._comm(target, mid_m, ww, self._seq_len)
+            attentioned = self._comm(target, mid_m, ww)
             return attentioned
 
-        # stage 4
-        elif stage == 4:
+        # stage 3, 4, 5
+        else:  # stage == 4:
             target, seq1, seq2 = infors
-            # shape = [img_len*batch_size, img_size]
-            img = tf.reshape(target, [-1, self._img_size])
             wx, wg1, wg2, ww = param
 
-            tmp1 = tf.matmul(img, wx)
-            tmp2 = self._supported(seq1, wg1, self._img_len, self._state_size)
-            tmp3 = self._supported(seq2, wg2, self._img_len, self._state_size)
+            tmp1 = tf.tensordot(target, wx, [[-1], [0]])
+            mid_m = tf.nn.tanh(tmp1 + tf.matmul(seq1, wg1) + tf.matmul(seq2, wg2))
 
-            mid_m = tf.tanh(tmp1 + tmp2 + tmp3)
-
-            attentioned = self._comm(target, mid_m, ww, self._img_len)
-            return attentioned
-
-        # stage 3, 5
-        else:
-            target, seq1, img = infors
-            seq = tf.reshape(target, [-1, self._vec_size])
-            wx, wg1, wg2, ww = param
-
-            tmp1 = tf.matmul(seq, wx)
-            tmp2 = self._supported(seq1, wg1, self._seq_len, self._state_size)
-            tmp3 = self._supported(img, wg2, self._seq_len, self._state_size)
-
-            mid_m = tf.tan(tmp1 + tmp2 + tmp3)
-
-            attentioned = self._comm(target, mid_m, ww, self._seq_len)
+            attentioned = self._comm(target, mid_m, ww)
             return attentioned
 
     def _supported(self, x_input, param, length, state_size):
@@ -189,20 +169,13 @@ class SeqCoAttention(ph.Widget):
         :param state_size: 每个的state_size
         :return: 计算好的结果，shape=[length*batch_size, state_size]
         """
-        # shape = [batch_size, state_size]
+
         tmp = tf.matmul(x_input, param)
-        # 做扩展,shape= [batch_size, state_size*length]
-        tmp = tf.tile(tmp, multiples=[1, length])
-        # shape = [batch_size, length, state_size]
-        tmp = tf.reshape(tmp, [-1, length, state_size])
-        # shape = [length, batch_size, state_size]
-        tmp = tf.transpose(tmp, [1, 0, 2])
-        # shape = [length*batch_size, state_size]
-        tmp = tf.reshape(tmp, [-1, state_size])
+        tmp = tf.tile(tmp, multiples=[length, 1])
 
         return tmp
 
-    def _comm(self, target, x_input, param, length):
+    def _comm(self, target, x_input, param):
         """
         attention的后两个计算步骤，每次都一样的，这里做了求和的操作，如果不需要求和的话，这里应该把最后的reduce_sum删掉
         :param target: 要计算的attentioned目标，对应公式中的x
@@ -211,10 +184,10 @@ class SeqCoAttention(ph.Widget):
         :param length: 对应的序列长度
         :return: target的attentioned之后的结果
         """
-        # shape = [length*batch_size, 1]
-        tmp = tf.matmul(x_input, param)
+        # shape = [seq_len, batch_size, 1]
+        tmp = tf.tensordot(x_input, param, [[-1], [0]])
         # shape = [length, batch_size, 1]
-        tmp = tf.reshape(tmp, [length, -1, 1])
+        # tmp = tf.reshape(tmp, [length, -1, 1])
         # 在seq_len维度上进行softmax，shape=[seq_len, batch_size, 1]
         alpha = tf.nn.softmax(tmp, dim=0)
 
@@ -291,6 +264,7 @@ class SeqCoAttention(ph.Widget):
     @property
     def ww5(self):
         return self._ww5
+
 
 
 # 计算两个向量之间的相似度，有三种，分别是cosin，bilinear，tensor
@@ -578,3 +552,13 @@ class MemoryNetwork(ph.Widget):
             tmp = tf.reshape(tmp, shape=[-1, self._batch_size, 1])
 
             return tmp
+
+
+def dropout(x, keep_prob, is_train, noise_shape=None, seed=None, name=None):
+    with tf.name_scope(name or "dropout"):
+        # if keep_prob < 1.0:
+        d = tf.nn.dropout(x, keep_prob, noise_shape=noise_shape, seed=seed)
+        if is_train:
+            return d
+        else:
+            return x

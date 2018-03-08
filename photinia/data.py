@@ -5,7 +5,7 @@
 @since: 2017-12-24
 """
 
-import pickle
+import collections
 import queue
 import threading
 
@@ -108,39 +108,72 @@ class MongoSource(DataSource):
     """
 
     def __init__(self,
-                 host, auth_db_name, user, passwd,
-                 db_name,
-                 coll_name,
-                 match,
-                 fields,
-                 buffer_size):
+                 coll,
+                 match=None,
+                 fields=(),
+                 buffer_size=10000):
+        """Construct from a mongodb collection instance.
+
+        :param coll: pymongo.collection.Collection, mongodb collection instance.
+        :param match: dict, e.g., {'domain': 'AlarmClock', 'rnd': {'$lt': 200}}.
+        :param fields: list, e.g., ['tokens', 'label'].
+        :param buffer_size: Positive integer. Default is 10000.
+        """
         super(MongoSource, self).__init__()
         #
-        self._host = host
-        self._auth_db_name = auth_db_name
-        self._user = user
-        self._passwd = passwd
-        self._db_name = db_name
-        self._coll_name = coll_name
-        self._match = match
-        self._fields = fields
-        self._buffer_size = buffer_size
+        # MongoDB Collection
+        if isinstance(coll, pymongo.collection.Collection):
+            self._coll = coll
+        else:
+            raise ValueError(
+                'Argument coll should be an object of '
+                'pymongo.collection.Collection.'
+            )
         #
-        self._project = {
-            field if isinstance(field, str) else field[0]: 1
-            for field in fields
-        }
-        self._mongo_client = pymongo.MongoClient(host)
-        self._mongo_client[auth_db_name].authenticate(user, passwd)
-        self._db = self._mongo_client[self._db_name]
-        self._coll = self._db[self._coll_name]
+        # Match and Project
+        self._match = match if match is not None else {}
+        self._fields = fields if fields is not None else ()
+        self._project = {field: 1 for field in fields}
+        #
+        # Buffer Size
+        if isinstance(buffer_size, int) and buffer_size > 0:
+            self._buffer_size = buffer_size
+        else:
+            raise ValueError('Argument buffer_size should be a positive integer.')
+        self._buffer_size = buffer_size if buffer_size > 0 else 10000
+        #
+        # Converters
+        self._field_converters = collections.defaultdict(collections.deque)
+        self._batch_converters = collections.defaultdict(collections.deque)
+        #
+        # Async Loading
         self._queue = queue.Queue()
         self._thread = None
         #
+        # One Pass Loading
         self._one_pass_buffer = None
+        self._start = 0
 
-    def __del__(self):
-        self._mongo_client.close()
+    def set_match(self, match):
+        self._match = match
+
+    def set_fields(self, fields):
+        self._fields = fields
+        self._project = {field: 1 for field in fields}
+
+    def add_field_mappers(self, field, fns):
+        if callable(fns):
+            fns = [fns]
+        elif not isinstance(fns, (list, tuple)):
+            raise ValueError('fns should be callable or list(tuple) of callables.')
+        self._field_converters[field] += fns
+
+    def add_batch_mappers(self, field, fns):
+        if callable(fns):
+            fns = [fns]
+        elif not isinstance(fns, (list, tuple)):
+            raise ValueError('fns should be callable or list(tuple) of callables.')
+        self._batch_converters[field] += fns
 
     def next_batch(self, size=0):
         if size > 0:
@@ -155,19 +188,48 @@ class MongoSource(DataSource):
                     raise doc
                 for i, value in enumerate(doc):
                     batch[i].append(value)
-            return batch
         else:
-            if self._one_pass_buffer is None:
-                batch = tuple([] for _ in self._fields)
-                cur = self._coll.find(self._match, self._project, cursor_type=pymongo.CursorType.EXHAUST)
-                for doc in cur:
-                    doc = tuple(self._get_value(doc, field) for field in self._fields)
-                    for i, value in enumerate(doc):
-                        batch[i].append(value)
-                self._one_pass_buffer = batch
-            return self._one_pass_buffer
+            batch = self._get_one_pass_buffer()
+        batch = tuple(self.__apply_batch_converters(field, column) for field, column in zip(self._fields, batch))
+        return batch
+
+    def next_batch_one_pass(self, size):
+        buffer = self._get_one_pass_buffer()
+        buffer_size = len(buffer[0])
+        if self._start >= buffer_size:
+            self._start = 0
+            return None
+        end = self._start + size
+        batch = tuple(
+            self.__apply_batch_converters(
+                field,
+                column[self._start: end] if end <= buffer_size else column[self._start:]
+            )
+            for field, column in zip(self._fields, buffer)
+        )
+        self._start = end
+        return batch
+
+    def __apply_batch_converters(self, field, batch_column):
+        if field in self._batch_converters:
+            for fn in self._batch_converters[field]:
+                batch_column = fn(batch_column)
+        return batch_column
+
+    def _get_one_pass_buffer(self):
+        if self._one_pass_buffer is None:
+            batch = tuple([] for _ in self._fields)
+            cur = self._coll.find(self._match, self._project, cursor_type=pymongo.CursorType.EXHAUST)
+            for doc in cur:
+                doc = tuple(self._get_value(doc, field) for field in self._fields)
+                for i, value in enumerate(doc):
+                    batch[i].append(value)
+            self._one_pass_buffer = batch
+        return self._one_pass_buffer
 
     def _load(self):
+        """This method is executed in another thread!
+        """
         try:
             cur = self._coll.aggregate([
                 {'$match': self._match},
@@ -180,12 +242,9 @@ class MongoSource(DataSource):
         except Exception as e:
             self._queue.put(e)
 
-    @staticmethod
-    def _get_value(doc, field):
-        if isinstance(field, str):
-            return doc[field]
-        else:
-            value = doc[field[0]]
-            for fn in field[1:]:
+    def _get_value(self, doc, field):
+        value = doc[field]
+        if field in self._field_converters:
+            for fn in self._field_converters[field]:
                 value = fn(value)
-            return value
+        return value
