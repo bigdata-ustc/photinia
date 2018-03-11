@@ -7,6 +7,7 @@
 
 import collections
 import queue
+import random
 import threading
 
 import numpy as np
@@ -147,7 +148,8 @@ class MongoSource(DataSource):
         self._batch_converters = collections.defaultdict(collections.deque)
         #
         # Async Loading
-        self._queue = queue.Queue()
+        self._main_thread = threading.current_thread()
+        self._queue = queue.Queue(self._buffer_size)
         self._thread = None
         #
         # One Pass Loading
@@ -231,14 +233,28 @@ class MongoSource(DataSource):
         """This method is executed in another thread!
         """
         try:
-            cur = self._coll.aggregate([
-                {'$match': self._match},
-                {'$project': self._project},
-                {'$sample': {'size': self._buffer_size}}
-            ])
-            for doc in cur:
-                doc = tuple(self._get_value(doc, field) for field in self._fields)
-                self._queue.put(doc)
+            count = self._coll.count()
+            if count < 10 * self._buffer_size:
+                cur = self._coll.aggregate([
+                    {'$match': self._match},
+                    {'$project': self._project},
+                    {'$sample': {'size': self._buffer_size}}
+                ])
+            else:
+                cur = self._coll.find(
+                    self._match,
+                    self._project
+                )
+            try:
+                for doc in cur:
+                    doc = tuple(self._get_value(doc, field) for field in self._fields)
+                    if random.uniform(0.0, 1.0) < 0.1:
+                        continue
+                    self._queue.put(doc)
+                    if not self._main_thread.is_alive():
+                        break
+            except:
+                pass
         except Exception as e:
             self._queue.put(e)
 

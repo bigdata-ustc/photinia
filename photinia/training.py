@@ -306,8 +306,24 @@ class Validator(DataFitter):
     def _fit(self, i, max_loop, context):
         ret_list = []
         ret_dict = collections.defaultdict(float)
-        next_batch = self._ds.__getattribute__('next_batch_one_pass')
-        if next_batch is None:
+        if hasattr(self._ds, 'next_batch_one_pass'):
+            next_batch = self._ds.__getattribute__('next_batch_one_pass')
+            size = 0
+            while True:
+                data_batch = next_batch(self._batch_size)
+                if data_batch is None:
+                    break
+                size += len(data_batch[0])
+                ret = self._slot(*data_batch)
+                if isinstance(ret, (tuple, list)):
+                    ret_list.append(ret)
+                elif isinstance(ret, (dict, collections.OrderedDict)):
+                    for name, value in ret.items():
+                        ret_dict[name] += value
+                else:
+                    # Should not be reached, since Slot ALWAYS returns tuple or dict.
+                    raise RuntimeError('Invalid Slot outputs type.')
+        else:
             data_batch = self._ds.next_batch(0)
             size = len(data_batch[0])
             batch_size = self._batch_size
@@ -325,22 +341,6 @@ class Validator(DataFitter):
             last_size = size % batch_size
             if last_size != 0:
                 data_batch = tuple(comp[-last_size:] for comp in data_batch)
-                ret = self._slot(*data_batch)
-                if isinstance(ret, (tuple, list)):
-                    ret_list.append(ret)
-                elif isinstance(ret, (dict, collections.OrderedDict)):
-                    for name, value in ret.items():
-                        ret_dict[name] += value
-                else:
-                    # Should not be reached, since Slot ALWAYS returns tuple or dict.
-                    raise RuntimeError('Invalid Slot outputs type.')
-        else:
-            size = 0
-            while True:
-                data_batch = next_batch(self._batch_size)
-                if data_batch is None:
-                    break
-                size += len(data_batch[0])
                 ret = self._slot(*data_batch)
                 if isinstance(ret, (tuple, list)):
                     ret_list.append(ret)
