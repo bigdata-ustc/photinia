@@ -6,10 +6,9 @@
 """
 
 import math
-import sys
 import threading
-import numpy as np
 
+import numpy as np
 import tensorflow as tf
 
 from . import initializers
@@ -401,10 +400,15 @@ class Linear(Widget):
 
 
 class Dropout(Widget):
-    """Dropout
-    """
 
     def __init__(self, name, keep_prob=None):
+        """Dropout
+
+        Args:
+            name (str): Widget name.
+            keep_prob (float|tf.Tensor): Keep probability.
+
+        """
         self._keep_prob = keep_prob
         super(Dropout, self).__init__(name)
 
@@ -420,12 +424,19 @@ class Dropout(Widget):
             )
 
     def _setup(self, x):
+        """Setup dropout.
+
+        Args:
+            x (tf.Tensor): Input tensor.
+
+        Returns:
+            tf.Tensor: Output tensor.
+
+        """
         return tf.nn.dropout(x, self._keep_prob)
 
 
 class Conv2D(Widget):
-    """2D convolutional layer.
-    """
 
     def __init__(self,
                  name,
@@ -439,6 +450,22 @@ class Conv2D(Widget):
                  w_init=initializers.TruncatedNormal(),
                  b_init=initializers.Zeros(),
                  flat_output=False):
+        """2D convolutional layer
+
+        Args:
+            name (str): Widget name.
+            input_size (tuple[int]): Input size.
+            output_channels (int): Numbers of output channels.
+            filter_height (int): Filter height.
+            filter_width (int): Filter width.
+            stride_height (int): Stride height.
+            stride_width (int): Stride width.
+            padding (str): Padding type. Should be one of {"SAME", "VALID"}. Default is "SAME".
+            w_init (initializers.Initializer): Weight(Kernel) initializer.
+            b_init (initializers.Initializer): Bias initializer.
+            flat_output (bool): If True, the output will be converted into flat vector(with shape batch_size * dim).
+
+        """
         if not (isinstance(input_size, (tuple, list)) and len(input_size) == 3):
             raise ValueError('input_size should be tuple or list with 3 elements.')
         self._input_height = input_size[0]
@@ -553,6 +580,15 @@ class Conv2D(Widget):
         return self._b
 
     def _setup(self, x):
+        """Setup 2D convolutional layer.
+
+        Args:
+            x (tf.Tensor): Input tensor.
+
+        Returns:
+            tf.Tensor: Output tensor.
+
+        """
         y = tf.nn.conv2d(
             input=x,
             filter=self._w,
