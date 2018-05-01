@@ -8,6 +8,7 @@
 import math
 import sys
 import threading
+import numpy as np
 
 import tensorflow as tf
 
@@ -33,9 +34,9 @@ def variable(name,
         tf.Variable: The variable object.
 
     Raises:
-      ValueError: If both `variable_def` and initial_value are specified.
-      ValueError: If the initial value is not specified, or does not have a shape and `validate_shape` is `True`.
-      RuntimeError: If eager execution is enabled.
+        ValueError: If both `variable_def` and initial_value are specified.
+        ValueError: If the initial value is not specified, or does not have a shape and `validate_shape` is `True`.
+        RuntimeError: If eager execution is enabled.
 
     """
     return tf.Variable(
@@ -234,20 +235,36 @@ class Widget(object):
         return self._prefix
 
     def get_parameters(self):
+        """Get parameter values of the widget.
+
+        Returns:
+            dict[str, np.ndarray]: Name to value dictionary of the parameters.
+
+        """
         var_list = self.get_trainable_variables()
         param_dict = {var.name: var for var in var_list}
         param_dict = settings.get_session().run(param_dict)
         return param_dict
 
     def set_parameters(self, param_dict, strict=True):
+        """Set values to the parameters.
+
+        Args:
+            param_dict (dict[str, np.ndarray]): Name to value dictionary.
+            strict (bool): If strict is True, all values in the dictionary must be used to assigned to the
+                associated parameter, or an error will be risen.
+
+        Raises:
+            ValueError: If strict is True and there are some values in the dictionary unused.
+
+        """
         var_list = self.get_trainable_variables()
         var_dict = {var.name: var for var in var_list}
         session = settings.get_session()
         for name, value in param_dict.items():
             if name not in var_dict:
                 if strict:
-                    print('%s is not in this model.' % name, file=sys.stderr)
-                continue
+                    raise ValueError('%s is not in this model.' % name)
             var = var_dict[name]
             var.load(value, session=session)
 
@@ -306,12 +323,18 @@ class Linear(Widget):
                  with_bias=True,
                  w_init=initializers.GlorotUniform(),
                  b_init=initializers.Zeros()):
-        """Construct the linear layer.
+        """Linear layer.
 
-        :param name: Name.
-        :param input_size: Input size.
-        :param output_size: Output size.
-        :param with_bias: If the widget has a bias variable.
+        y = Wx + b
+
+        Args:
+            name (str): Widget name.
+            input_size (int): Input size.
+            output_size (int): Output size.
+            with_bias (bool): If the layer contains bias.
+            w_init (initializers.Initializer): Weight initializer.
+            b_init (initializers.Initializer): Bias initializer.
+
         """
         self._input_size = input_size
         self._output_size = output_size
@@ -336,7 +359,6 @@ class Linear(Widget):
         """Build the linear layer.
         Two parameters: weight and bias.
 
-        :return: None.
         """
         self._w = tf.Variable(
             self._w_init.build(
@@ -362,11 +384,15 @@ class Linear(Widget):
         return self._b
 
     def _setup(self, x, axes=None):
-        """Setup the linear layer.
+        """Setup the layer.
 
-        :param x: Input tensor.
-        :param axes: Axes. If x is a tensor, the layer will perform tensor dot.
-        :return: Output tensor.
+        Args:
+            x (tf.Tensor): Input tensor.
+            axes (tuple[int]|list[int]): If x is a tensor, the layer will perform tensor dot.
+
+        Returns:
+            tf.Tensor: Output tensor.
+
         """
         y = tf.matmul(x, self._w) if axes is None else tf.tensordot(x, self._w, axes=axes)
         if self._with_bias:
