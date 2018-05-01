@@ -1,9 +1,53 @@
 #!/usr/bin/env python3
 
+"""
+@author: xi
+@since: 2018-02-10
+"""
+
 import pickle
 
-import pymongo
 import numpy as np
+
+import photinia as ph
+
+
+class Vocabulary(object):
+
+    def __init__(self, coll, word_field='word', index_field='index'):
+        self._coll = coll
+        self._word_field = word_field
+        self._index_field = index_field
+        #
+        voc_size = coll.count()
+        self._voc_size = voc_size
+        self._word_dict = {
+            doc[word_field]: doc[index_field]
+            for doc in coll.find()
+        }
+        self._index_dict = {
+            index: word
+            for word, index in self._voc_size
+        }
+
+    @property
+    def voc_size(self):
+        return self._voc_size
+
+    @property
+    def word_dict(self):
+        return self._word_dict
+
+    @property
+    def index_dict(self):
+        return self._index_dict
+
+    def words_to_one_hots(self, words):
+        one_hot_list = [
+            ph.utils.one_hot(self._word_dict[word], self._voc_size, np.float32)
+            for word in words
+        ]
+        return one_hot_list
 
 
 class WordEmbedding(object):
@@ -61,14 +105,13 @@ def pad_sequences(array_list, dtype=np.float32):
             ret[i, j] = row
     return ret
 
-
-if __name__ == '__main__':
-    with pymongo.MongoClient('uichost:38324') as client:
-        client['admin'].authenticate('root', 'SELECT * FROM password;')
-        db = client['reviews']
-        coll = db['glove_twitter']
-        we = WordEmbedding(coll)
-        sentence = 'Where is your sexy girl ?'
-        print(sentence)
-        for _ in range(10):
-            print(len(we.words_to_vectors(sentence, delimiter=' ')))
+# if __name__ == '__main__':
+#     with pymongo.MongoClient('uichost:38324') as client:
+#         client['admin'].authenticate('root', 'SELECT * FROM password;')
+#         db = client['reviews']
+#         coll = db['glove_twitter']
+#         we = WordEmbedding(coll)
+#         sentence = 'Where is your sexy girl ?'
+#         print(sentence)
+#         for _ in range(10):
+#             print(len(we.words_to_vectors(sentence, delimiter=' ')))

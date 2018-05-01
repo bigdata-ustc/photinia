@@ -234,7 +234,7 @@ class MongoSource(DataSource):
         """
         try:
             count = self._coll.count()
-            if count < 10 * self._buffer_size:
+            if count < 2 * self._buffer_size:
                 cur = self._coll.aggregate([
                     {'$match': self._match},
                     {'$project': self._project},

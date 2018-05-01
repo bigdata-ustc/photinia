@@ -36,7 +36,7 @@ class Widget(object):
     """
 
     LOCK = threading.Semaphore(1)
-    INSTANCES = {}
+    INSTANCES = dict()
 
     def __init__(self,
                  name=None,
@@ -155,14 +155,14 @@ class Widget(object):
 
     def get_variables(self):
         if self._name is None:
-            return []
+            return list()
         prefix = self._prefix
         global_vars = tf.global_variables()
         return [var for var in global_vars if var.name.startswith(prefix)]
 
     def get_trainable_variables(self):
         if self._name is None:
-            return []
+            return list()
         trainable_vars = tf.trainable_variables()
         # if __debug__:
         #     print('*' * 100)
@@ -773,7 +773,7 @@ class Conv2DTrans(Widget):
 
     @property
     def input_size(self):
-        return self._input_height, self._input_width
+        return self._input_height, self._input_width, self._input_channels
 
     @property
     def input_height(self):
@@ -786,6 +786,10 @@ class Conv2DTrans(Widget):
     @property
     def input_channels(self):
         return self._input_channels
+
+    @property
+    def flat_size(self):
+        return self._flat_size
 
     @property
     def output_size(self):
@@ -886,7 +890,7 @@ class GRUCell(Widget):
                  name,
                  input_size,
                  state_size,
-                 with_bias=True,
+                 with_bias=False,
                  activation=tf.nn.tanh,
                  w_init=initializers.TruncatedNormal(0, 1e-3),
                  u_init=initializers.TruncatedNormal(0, 1e-3),
@@ -1067,12 +1071,14 @@ class GRUCell(Widget):
 
     def setup_sequence(self,
                        seq,
-                       widgets=None,
+                       input_widgets=None,
+                       output_widgets=None,
                        init_state=None):
         """Setup this cell as an RNN for the given sequence.
 
         :param seq: Sequence tensor.
-        :param widgets: List of widgets before the cell.
+        :param input_widgets: Widgets to setup before input to cell.
+        :param output_widgets: Widgets to setup after cell state.
         :param init_state: Initial state tensor.
         :return: Output States.
         """
@@ -1084,13 +1090,79 @@ class GRUCell(Widget):
                 dtype=settings.D_TYPE,
                 name='init_state'
             )
-        states = tf.scan(
-            fn=lambda acc, elem: self.setup(operations.setup(elem, widgets), acc),
+
+        def fn(acc, elem):
+            cell_input = operations.setup(elem, input_widgets)
+            state = self.setup(cell_input, acc)
+            if output_widgets is None:
+                return state
+            else:
+                output = operations.setup(state, output_widgets)
+                return state, output
+
+        states_outputs = tf.scan(
+            fn=fn,
             elems=seq,
             initializer=init_state
         )
+
+        if output_widgets is None:
+            states = operations.transpose_sequence(states_outputs, name='states')
+            return states
+        else:
+            states = operations.transpose_sequence(states_outputs[0], name='states')
+            outputs = operations.transpose_sequence(states_outputs[1], name='outputs')
+            return states, outputs
+
+    def setup_recursive(self,
+                        max_len,
+                        input_widgets=None,
+                        output_widgets=None,
+                        init_state=None,
+                        init_input=None):
+        """Setup the cell as a RNN in a recursive manner.
+
+        :param max_len: Max length. (int or Tensor)
+        :param input_widgets: Widgets to setup before input to cell.
+        :param output_widgets: Widgets to setup after cell state.
+        :param init_state: Initial state.
+        :param init_input: Initial input.
+        :return: States and outputs.
+        """
+        if init_state is None and init_input is None:
+            raise ValueError('init_state and init_input should not be None at the same time.')
+
+        if init_state is None:
+            batch_size = tf.shape(init_input)[0]
+            init_state = tf.zeros(
+                shape=(batch_size, self.state_size),
+                dtype=settings.D_TYPE,
+                name='init_state'
+            )
+        if init_input is None:
+            batch_size = tf.shape(init_state)[0]
+            init_input = tf.zeros(
+                shape=(batch_size, self._input_size),
+                dtype=settings.D_TYPE,
+                name='init_input'
+            )
+
+        def fn_recursive(acc, _):
+            prev_state, prev_output = acc
+            cell_input = operations.setup(prev_output, input_widgets)
+            state = self.setup(cell_input, prev_state)
+            output = operations.setup(state, output_widgets)
+            return state, output
+
+        states, outputs = tf.scan(
+            fn=fn_recursive,
+            elems=tf.zeros((max_len,), dtype=tf.int8),
+            initializer=(init_state, init_input)
+        )
+
         states = operations.transpose_sequence(states, name='states')
-        return states
+        outputs = operations.transpose_sequence(states, name='outputs')
+        return states, outputs
 
 
 class LSTMCell(Widget):
@@ -1572,7 +1644,7 @@ class Gate(Widget):
         super(Gate, self).__init__(name)
 
     def _build(self):
-        self._w_list = []
+        self._w_list = list()
         for i, input_size in enumerate(self._input_sizes):
             w_init = self._w_init.build((input_size, self._output_size), name='w_%d_init' % i)
             w = variable('w_%d' % i, w_init)

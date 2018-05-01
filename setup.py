@@ -14,7 +14,7 @@ if __name__ == '__main__':
             'photinia.apps',
             'photinia.testing'
         ],
-        version='0.2.3',
+        version='0.2.4',
         keywords=('deep learning', 'neural network'),
         description='Build deep learning models quickly for scientists in an object-oriented way.',
         long_description=long_description,
@@ -25,7 +25,8 @@ if __name__ == '__main__':
         platforms='any',
         classifiers=[
             'Programming Language :: Python :: 3.4',
-            'Programming Language :: Python :: 3.5'
+            'Programming Language :: Python :: 3.5',
+            'Programming Language :: Python :: 3.6',
         ],
         include_package_data=True,
         zip_safe=True,

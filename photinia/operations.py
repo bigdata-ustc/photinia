@@ -10,6 +10,10 @@ import tensorflow as tf
 from . import settings
 
 
+def log(x, eps=1e-7, name=None):
+    return tf.log(x + eps, name=name)
+
+
 def lrelu(x,
           leak=1e-3,
           name=None):
@@ -163,45 +167,19 @@ def transpose_sequence(seq,
     return tf.transpose(seq, perm, name=name)
 
 
-def setup_sequence(seq,
-                   widget_list,
-                   transpose_in=False,
-                   transpose_out=False,
-                   cell=None,
-                   init_state=None):
+def setup_sequence(seq, widget_list):
     """Setup a series of widgets/ops with the given sequence "seq".
 
     :param seq: Tensor represents a sequence.
     :param widget_list: List of widgets/ops.
-    :param transpose_in: Should the sequence tensor be transposed before setup? Default is False.
-    :param transpose_out: Should the sequence tensor be transposed after setup? Default is False.
-    :param cell: The recurrent cell. If this is not None, the sequence will be setup in a recurrent way.
-        Default is None.
-    :param init_state: The initial state of the recurrent cell.
     :return: The output sequence.
     """
-    if transpose_in:
-        seq = transpose_sequence(seq)
-    if cell is None:
-        y = tf.map_fn(
-            fn=lambda elem: setup(elem, widget_list),
-            elems=seq
-        )
-    else:
-        if init_state is None:
-            batch_size = tf.shape(seq)[1]
-            state_size = cell.state_size
-            init_state = tf.zeros(
-                shape=(batch_size, state_size),
-                dtype=settings.D_TYPE
-            )
-        y = tf.scan(
-            fn=lambda acc, elem: cell.setup(setup(elem, widget_list), acc),
-            elems=seq,
-            initializer=init_state
-        )
-    if transpose_out:
-        y = transpose_sequence(y)
+    seq = transpose_sequence(seq)
+    y = tf.map_fn(
+        fn=lambda elem: setup(elem, widget_list),
+        elems=seq
+    )
+    y = transpose_sequence(y)
     return y
 
 
