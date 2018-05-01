@@ -16,7 +16,28 @@ from . import operations
 from . import settings
 
 
-def variable(name, initial_value, trainable=True):
+def variable(name,
+             initial_value,
+             trainable=True):
+    """Create a variable.
+    Shortcut to "tf.Variable()".
+
+    Args:
+        name (str): Variable name.
+        initial_value: A `Tensor`, or Python object convertible to a `Tensor`,
+            which is the initial value for the Variable.
+        trainable (bool): If `True`, the default, also adds the variable to the graph collection
+            `GraphKeys.TRAINABLE_VARIABLES`.
+
+    Returns:
+        tf.Variable: The variable object.
+
+    Raises:
+      ValueError: If both `variable_def` and initial_value are specified.
+      ValueError: If the initial value is not specified, or does not have a shape and `validate_shape` is `True`.
+      RuntimeError: If eager execution is enabled.
+
+    """
     return tf.Variable(
         name=name,
         initial_value=initial_value,
@@ -25,7 +46,22 @@ def variable(name, initial_value, trainable=True):
     )
 
 
-def placeholder(name, shape, dtype=settings.D_TYPE):
+def placeholder(name,
+                shape,
+                dtype=settings.D_TYPE):
+    """Create a placeholder.
+    Shortcut to "tf.placeholder()".
+
+    Args:
+        name (str): Name of the placeholder.
+        shape (tuple|list): The shape of the tensor to be fed (optional). If the shape is not specified,
+            you can feed a tensor of any shape.
+        dtype (tf.DType): The type of elements in the tensor to be fed.
+
+    Returns:
+        tf.Tensor: The placeholder tensor.
+
+    """
     return tf.placeholder(name=name, shape=shape, dtype=dtype)
 
 
@@ -43,8 +79,9 @@ class Widget(object):
                  build=True):
         """Construct a widget.
 
-        :param name: Name.
-            If the widget has variable that wants to be trained, the name must be given.
+        Args:
+            name (str): Widget name.
+            build (bool): If the widget will be built during the xonstruction.
         """
         if name is not None:
             if not isinstance(name, str):
@@ -71,7 +108,6 @@ class Widget(object):
         """Build the widget.
         The main purpose of this function is to create the trainable variables (parameters) for the widget.
 
-        :return: None.
         """
         if self._built:
             return self
@@ -109,6 +145,7 @@ class Widget(object):
 
         There is one task to be done in this method:
         1) Create the parameters (trainable variables) for the widget.
+
         """
         raise NotImplementedError()
 
@@ -118,9 +155,6 @@ class Widget(object):
         No matter how many paths be created, the number of trainable variables is (and of course cannot) be changed.
         They share the same parameters of the widget.
 
-        :param args:
-        :param kwargs:
-        :return:
         """
         if not self._built:
             raise RuntimeError('This widget has not been built. Please build first.')
@@ -144,9 +178,6 @@ class Widget(object):
 
         In this method, you CANNOT create any trainable variables.
 
-        :param args:
-        :param kwargs:
-        :return:
         """
         raise NotImplementedError()
 
@@ -154,6 +185,12 @@ class Widget(object):
         return self.setup(*args, **kwargs)
 
     def get_variables(self):
+        """Get variables(tensors) of the widget.
+
+        Returns:
+            list[tf.Tensor]: List of variables.
+
+        """
         if self._name is None:
             return list()
         prefix = self._prefix
@@ -161,25 +198,39 @@ class Widget(object):
         return [var for var in global_vars if var.name.startswith(prefix)]
 
     def get_trainable_variables(self):
+        """Get variables(tensors that marked as "trainable") of the widget.
+
+        Returns:
+            list[tf.Tensor]: List of variables.
+
+        """
         if self._name is None:
             return list()
         trainable_vars = tf.trainable_variables()
-        # if __debug__:
-        #     print('*' * 100)
-        #     print('DEBUG INFO %s' % self.get_trainable_variables)
-        #     print('*' * 100)
-        #     for var in trainable_vars:
-        #         print(var.name)
-        #     print('*' * 100)
-        #     print()
         return [var for var in trainable_vars if var.name.startswith(self._prefix)]
 
     @property
     def full_name(self):
+        """Get the full name of the widget.
+        E.g., model/layers/layer1
+        The full name does not contain "/" character.
+
+        Returns:
+            str: Full name of the widget.
+
+        """
         return self._full_name
 
     @property
     def prefix(self):
+        """Get the prefix of the widget.
+        E.g., model/layers/layer1/
+        The prefix always ends with a "/" character.
+
+        Returns:
+            str: Prefix of the widget.
+
+        """
         return self._prefix
 
     def get_parameters(self):
