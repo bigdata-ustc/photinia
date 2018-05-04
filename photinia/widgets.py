@@ -612,6 +612,19 @@ class Pool2D(Widget):
                  stride_width=2,
                  padding='SAME',
                  pool_type='max'):
+        """Pooling layer for 2D.
+
+        Args:
+            name (str): Widget name.
+            input_size (tuple[int]): Input size.
+            filter_height (int): Filter height.
+            filter_width (int): Filter width.
+            stride_height (int): Stride height.
+            stride_width (int): Stride width.
+            padding (str): Padding type. Should be one of {"SAME", "VALID"}. Default is "SAME".
+            pool_type (str): Pooling type. Should be one of {"max", "mean"}. Default is "max".
+
+        """
         self._input_size = input_size
         self._filter_height = filter_height
         self._filter_width = filter_width
@@ -672,6 +685,15 @@ class Pool2D(Widget):
         pass
 
     def _setup(self, x):
+        """Setup pooling layer for 2D.
+
+        Args:
+            x (tf.Tensor): Input tensor.
+
+        Returns:
+            tf.Tensor: Output tensor.
+
+        """
         if self._pool_type == 'max':
             y = tf.nn.max_pool(
                 value=x,
@@ -849,8 +871,6 @@ class GroupConv2D(Widget):
 
 
 class Conv2DTrans(Widget):
-    """ConvTransposeLayer
-    """
 
     def __init__(self,
                  name,
@@ -864,6 +884,22 @@ class Conv2DTrans(Widget):
                  w_init=initializers.TruncatedNormal(),
                  b_init=initializers.Zeros(),
                  flat_input=False):
+        """Transpose convolutional layer for 2D.
+
+        Args:
+            name (str): Widget name.
+            output_size (tuple[int]): Output size.
+            input_channels (int): Input size.
+            filter_height (int): Filter height.
+            filter_width (int): Filter width.
+            stride_height (int): Stride height.
+            stride_width (int): Stride width.
+            data_format (str): Data format. 'NHWC' and 'NCHW' are supported.
+            w_init (initializers.Initializer): Weight(Kernel) initializer.
+            b_init (initializers.Initializer): Bias initializer.
+            flat_input (bool): If True, the output will be converted into flat vector(with shape batch_size * dim).
+
+        """
         if not (isinstance(output_size, (tuple, list)) and len(output_size) == 3):
             raise ValueError('output_size should be tuple or list with 3 elements.')
         self._output_height = output_size[0]
@@ -937,11 +973,6 @@ class Conv2DTrans(Widget):
         return self._stride_width
 
     def _build(self):
-        """Build the layer.
-        Two parameters: filter (weight) and bias.
-
-        :return: None.
-        """
         self._w = tf.Variable(
             self._w_init.build(
                 shape=(
@@ -971,10 +1002,14 @@ class Conv2DTrans(Widget):
         return self._b
 
     def _setup(self, x):
-        """Setup the layer.
+        """Setup transpose convolutional layer.
 
-        :param x: Input tensor with "NHWC" format.
-        :return: Output tensor with "NHWC" format.
+        Args:
+            x (tf.Tensor): Input tensor.
+
+        Returns:
+            tf.Tensor: Output tensor.
+
         """
         input_shape = tf.shape(x)
         batch_size, input_height, input_width = input_shape[0], input_shape[1], input_shape[2]
