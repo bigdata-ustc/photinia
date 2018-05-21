@@ -1905,3 +1905,141 @@ class Gate(Widget):
         y += self._b
         y = tf.nn.sigmoid(y)
         return y
+
+
+class ResidualLinear(Widget):
+    """Residual network cell for DNN.
+
+    The original version is contributed by zhkun~(Kun Zhang) in his testing code.
+    """
+
+    def __init__(self,
+                 name,
+                 size,
+                 num_layers=1,
+                 w_init=initializers.GlorotUniform(),
+                 b_init=initializers.GlorotUniform()):
+        """Residual network cell for DNN.
+
+        Args:
+            name (str): Widget name.
+            size (int): Input and output size.
+            num_layers (int): Number of layers.
+            w_init (initializers.Initializer): Initializer for weight.
+            b_init (initializers.Initializer): Initializer for bias.
+
+        """
+        if num_layers < 1:
+            raise ValueError(
+                'Invalid number of layers. Number that larger than 1 expected, got %d.' % num_layers
+            )
+        self._size = size
+        self._num_layers = num_layers
+        self._w_init = w_init
+        self._b_init = b_init
+        self._layers = list()
+        super(ResidualLinear, self).__init__(name)
+
+    @property
+    def size(self):
+        return self._size
+
+    @property
+    def num_layers(self):
+        return self._num_layers
+
+    def _build(self):
+        for i in range(self._num_layers):
+            layer = Linear(
+                'lin_' + str(i),
+                input_size=self._size,
+                output_size=self._size,
+                w_init=self._w_init,
+                b_init=self._b_init
+            )
+            self._layers.append(layer)
+
+    def _setup(self, x, activation=operations.lrelu):
+        """Setup.
+
+        Args:
+            x (tf.Tensor): Input tensor.
+            activation ((tf.Tensor) -> tf.Tensor): Activation function.
+
+        Returns:
+            tf.Tensor: Output Tensor.
+
+        """
+        h = x
+        for layer in self._layers[:-1]:
+            h = layer.setup(h)
+            if activation is not None:
+                h = activation(h)
+        h = self._layers[-1].setup(h)
+        h = h + x
+        if activation is not None:
+            h = activation(h)
+        return h
+
+
+class HighWayLinear(Widget):
+    """Highway network cell for DNN.
+
+    The original version is contributed by zhkun~(Kun Zhang) in his testing code.
+    """
+
+    def __init__(self,
+                 name,
+                 size,
+                 w_init=initializers.GlorotUniform(),
+                 b_init=initializers.GlorotUniform()):
+        """Highway network cell for DNN.
+
+        Args:
+            name (str): Widget name.
+            size (int): Input and output size.
+            w_init (initializers.Initializer): Initializer for weight.
+            b_init (initializers.Initializer): Initializer for bias.
+
+        """
+        self._size = size
+        self._w_init = w_init
+        self._b_init = b_init
+        super(HighWayLinear, self).__init__(name)
+
+    def _build(self):
+        self._linear = Linear(
+            'lin',
+            input_size=self._size,
+            output_size=self._size,
+            w_init=self._w_init,
+            b_init=self._b_init
+        )
+        self._gate = Linear(
+            'gate',
+            input_size=self._size,
+            output_size=self._size,
+            w_init=self._w_init,
+            b_init=self._b_init
+        )
+
+    def _setup(self, x, activation=operations.lrelu):
+        """Setup.
+
+        Args:
+            x (tf.Tensor): Input tensor.
+            activation ((tf.Tensor) -> tf.Tensor): Activation function.
+
+        Returns:
+            tf.Tensor: Output Tensor.
+
+        """
+        h = self._linear.setup(x)
+        if activation is not None:
+            h = activation(h)
+
+        g = self._gate.setup(x)
+        g = tf.nn.sigmoid(g)
+
+        y = tf.multiply(g, h) + tf.multiply((1.0 - g), x)
+        return y
