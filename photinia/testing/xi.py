@@ -186,14 +186,20 @@ class BatchSource(DataSource):
             fns = [fns]
         elif not isinstance(fns, (list, tuple)):
             raise ValueError('fns should be callable or list(tuple) of callables.')
-        self._cell_fns[column_name] += fns
+        if type(column_name) is not list:
+            column_name = [column_name]
+        for item in column_name:
+            self._cell_fns[item] += fns
 
     def add_column_fns(self, column_name, fns):
         if callable(fns):
             fns = [fns]
         elif not isinstance(fns, (list, tuple)):
             raise ValueError('fns should be callable or list(tuple) of callables.')
-        self._column_fns[column_name] += fns
+        if type(column_name) is not list:
+            column_name = [column_name]
+        for item in column_name:
+            self._column_fns[item] += fns
 
     def meta(self):
         return self._meta
