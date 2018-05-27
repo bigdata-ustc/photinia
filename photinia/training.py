@@ -182,7 +182,7 @@ class Trainer(widgets.Widget):
     def get_slot(self, name):
         return self._slots[name] if name in self._slots else None
 
-    def fit(self, max_loop=10000):
+    def fit(self, max_loop=10000, fitters=None):
         """Train the model to fit the given dataset.
 
         :param max_loop: The number of max loop. Default is 10000.
@@ -192,9 +192,10 @@ class Trainer(widgets.Widget):
             settings.CONTEXT_TRAINER: self,
             settings.CONTEXT_MAX_LOOP: max_loop
         }
+        fitters = self._fitters if fitters is None else self._fitters + fitters
         for i in range(1, max_loop + 1):
             context[settings.CONTEXT_LOOP] = i
-            for fitter in self._fitters:
+            for fitter in fitters:
                 try:
                     fitter.fit(i, max_loop, context)
                 except FitterInterrupt:

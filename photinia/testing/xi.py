@@ -12,6 +12,10 @@ import threading
 
 import numpy as np
 
+from photinia.training import Fitter
+from photinia.training import Trainer
+from photinia import settings
+
 
 class DataSource(object):
     """DataSource
@@ -181,6 +185,10 @@ class BatchSource(DataSource):
 
         self._eof = False
 
+    @property
+    def batch_size(self):
+        return self._batch_size
+
     def add_cell_fns(self, column_name, fns):
         if callable(fns):
             fns = [fns]
@@ -306,5 +314,96 @@ class ThreadBufferedSource(DataSource):
         # print('DEBUG: Loading thread stopped. %d loaded' % (i + 1))
 
 
-if __name__ == '__main__':
-    exit()
+class DataFitter(Fitter):
+    """Data fitter
+    """
+
+    def __init__(self,
+                 data_source,
+                 trainer,
+                 slot_name=settings.TRAIN,
+                 interval=1,
+                 count=1):
+        """Fit the trainer using data.
+
+        Args:
+            data_source (BatchSource): Data source that support batch iteration.
+            trainer (Trainer): The trainer to fit.
+            slot_name (str): Slot that used to fit the trainer.
+            interval (int): Invoke interval.
+            count (int): Invoke count.
+
+        """
+        super(DataFitter, self).__init__(interval, count)
+        if not isinstance(data_source, BatchSource):
+            raise ValueError('data_source should be an instance of training.DataSource.')
+        self._data_source = data_source
+        if not isinstance(trainer, Trainer):
+            raise ValueError('trainer should be an instance of training.Trainer.')
+        self._trainable = trainer
+        self._slot_name = slot_name
+        self._slot = trainer.get_slot(slot_name)
+
+    def _fit(self, i, max_loop, context):
+        data_batch = self._data_source.next()
+        if data_batch is None:
+            data_batch = self._data_source.next()
+        if data_batch is None:
+            raise RuntimeError('Too many "None" returned by data source.')
+        ret = self._slot(*data_batch)
+        context[self._slot_name] = ret
+
+
+class Validator(DataFitter):
+    """Validator
+    """
+
+    def __init__(self,
+                 data_source,
+                 trainer,
+                 slot_name=settings.VALIDATE,
+                 interval=1,
+                 count=1):
+        """
+
+        Args:
+            data_source (BatchSource):
+            trainer:
+            slot_name:
+            interval:
+            count:
+        """
+        super(Validator, self).__init__(
+            data_source=data_source,
+            trainer=trainer,
+            slot_name=slot_name,
+            interval=interval,
+            count=count
+        )
+
+    def _fit(self, i, max_loop, context):
+        ret_list = []
+        ret_dict = collections.defaultdict(float)
+        size = 0
+        while True:
+            data_batch = self._data_source.next()
+            if data_batch is None:
+                break
+            size += len(data_batch[0])
+            ret = self._slot(*data_batch)
+            if isinstance(ret, (tuple, list)):
+                ret_list.append(ret)
+            elif isinstance(ret, (dict, collections.OrderedDict)):
+                for name, value in ret.items():
+                    ret_dict[name] += value
+            else:
+                # Should not be reached, since Slot ALWAYS returns tuple or dict.
+                raise RuntimeError('Invalid Slot outputs type.')
+
+        batch_size = self._data_source.batch_size
+        factor = batch_size / size
+        context[self._slot_name] = tuple(
+            comp for comp in np.sum(ret_list, axis=0) * factor
+        ) if len(ret_list) != 0 else {
+            name: value * factor for name, value in ret_dict.items()
+        }
