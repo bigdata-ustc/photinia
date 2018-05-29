@@ -139,7 +139,7 @@ class Trainer(widgets.Widget):
         #     self._session_provided = True
         self._slots = {}
         self._predict_slot = None
-        self._fitters = collections.deque()
+        self._fitters = list()
         super(Trainer, self).__init__(name, build)
 
     # def __del__(self):
