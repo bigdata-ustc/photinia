@@ -81,7 +81,8 @@ class Widget(object):
 
         Args:
             name (str): Widget name.
-            build (bool): If the widget will be built during the xonstruction.
+            build (bool): If the widget will be built during the construction.
+
         """
         if name is not None:
             if not isinstance(name, str):

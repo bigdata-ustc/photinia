@@ -382,28 +382,65 @@ class Validator(DataFitter):
         )
 
     def _fit(self, i, max_loop, context):
-        ret_list = []
-        ret_dict = collections.defaultdict(float)
-        size = 0
+        ret_dict = collections.defaultdict(list)
         while True:
             data_batch = self._data_source.next()
             if data_batch is None:
                 break
-            size += len(data_batch[0])
             ret = self._slot(*data_batch)
             if isinstance(ret, (tuple, list)):
-                ret_list.append(ret)
+                for i, value in enumerate(ret):
+                    ret_dict[i].append(value)
             elif isinstance(ret, (dict, collections.OrderedDict)):
                 for name, value in ret.items():
-                    ret_dict[name] += value
+                    ret_dict[name].append(value)
             else:
                 # Should not be reached, since Slot ALWAYS returns tuple or dict.
                 raise RuntimeError('Invalid Slot outputs type.')
 
-        batch_size = self._data_source.batch_size
-        factor = batch_size / size
-        context[self._slot_name] = tuple(
-            comp for comp in np.sum(ret_list, axis=0) * factor
-        ) if len(ret_list) != 0 else {
-            name: value * factor for name, value in ret_dict.items()
-        }
+        context[self._slot_name] = ret_dict
+        self.validate(context[self._slot_name])
+
+    def validate(self, values):
+        pass
+
+
+class BiclassificationValidator(Validator):
+
+    def __init__(self,
+                 data_source,
+                 trainer,
+                 slot_name=settings.VALIDATE,
+                 interval=1,
+                 count=1,
+                 tp='tp',
+                 tn='tn',
+                 fp='fp',
+                 fn='fn'):
+        super(BiclassificationValidator, self).__init__(
+            data_source=data_source,
+            trainer=trainer,
+            slot_name=slot_name,
+            interval=interval,
+            count=count
+        )
+        self._tp = tp
+        self._tn = tn
+        self._fp = fp
+        self._fn = fn
+
+    def validate(self, values):
+        tp = sum(values[self._tp])
+        tn = sum(values[self._tn])
+        fp = sum(values[self._fp])
+        fn = sum(values[self._fn])
+
+        pre = tp / (tp + fp)
+        rec = tp / (tp + fn)
+        f1 = 2 * (pre * rec) / (pre + rec)
+        acc = (tp + tn) / (tp + tn + fp + fn)
+
+        values['pre'] = pre
+        values['rec'] = rec
+        values['f1'] = f1
+        values['acc'] = acc
