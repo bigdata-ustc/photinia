@@ -10,11 +10,15 @@ if __name__ == '__main__':
         name='photinia',
         packages=[
             'photinia',
+            'photinia.core',
+            'photinia.io',
+            'photinia.cnn',
+            'photinia.deep_rl',
             'photinia.utils',
-            'photinia.apps',
+            'photinia.misc',
             'photinia.testing'
         ],
-        version='0.2.4',
+        version='0.3.0',
         keywords=('deep learning', 'neural network'),
         description='Build deep learning models quickly for scientists in an object-oriented way.',
         long_description=long_description,

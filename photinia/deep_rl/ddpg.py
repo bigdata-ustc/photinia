@@ -6,14 +6,13 @@
 """
 
 import argparse
-import collections
-import random
 
 import gym
 import numpy as np
 import tensorflow as tf
 
 import photinia as ph
+from . import core
 
 
 class Actor(ph.Widget):
@@ -55,7 +54,7 @@ class Actor(ph.Widget):
                 self._layer2,
                 tf.nn.tanh
             ]
-        ) * 2.0
+        )
 
 
 class Critic(ph.Widget):
@@ -163,7 +162,7 @@ class Agent(ph.Model):
         s_in = ph.placeholder('s_in', (None, self._state_size))
         a_source_pred = a_source.setup(s_in)
         self._add_slot(
-            'predict_a',
+            '_predict',
             inputs=s_in,
             outputs=a_source_pred
         )
@@ -178,7 +177,7 @@ class Agent(ph.Model):
         var_list = q_source.get_trainable_variables()
         reg = ph.reg.Regularizer().add_l1_l2(var_list)
         self._add_slot(
-            'update_q_source',
+            '_update_q_source',
             inputs=(s_in, a_source_pred, r_in, s_in_),
             outputs=loss,
             updates=tf.train.AdamOptimizer(1e-3).minimize(
@@ -199,7 +198,7 @@ class Agent(ph.Model):
         loss = tf.reduce_mean(q_source_pred)
         reg = ph.reg.Regularizer().add_l1_l2(var_list)
         self._add_slot(
-            'update_a_source',
+            '_update_a_source',
             inputs=s_in,
             # updates=tf.train.AdamOptimizer(-1e-3).apply_gradients(
             #     zip(grad_policy, var_list)
@@ -211,7 +210,7 @@ class Agent(ph.Model):
         )
 
         self._add_slot(
-            'update_q_target',
+            '_update_q_target',
             updates=tf.group(*[
                 tf.assign(v_target, self._tao * v_source + (1.0 - self._tao) * v_target)
                 for v_source, v_target in zip(
@@ -222,7 +221,7 @@ class Agent(ph.Model):
         )
 
         self._add_slot(
-            'update_a_target',
+            '_update_a_target',
             updates=tf.group(*[
                 tf.assign(v_target, self._tao * v_source + (1.0 - self._tao) * v_target)
                 for v_source, v_target in zip(
@@ -232,88 +231,46 @@ class Agent(ph.Model):
             ])
         )
 
-        init_q = tf.group(*[
-            tf.assign(v_target, v_source)
-            for v_source, v_target in zip(
-                q_source.get_trainable_variables(),
-                q_target.get_trainable_variables()
-            )
-        ])
-        init_a = tf.group(*[
-            tf.assign(v_target, v_source)
-            for v_source, v_target in zip(
-                a_source.get_trainable_variables(),
-                a_target.get_trainable_variables()
-            )
-        ])
         self._add_slot(
-            'init',
-            updates=(init_q, init_a)
+            '_init_a_target',
+            updates=tf.group(*[
+                tf.assign(v_target, v_source)
+                for v_source, v_target in zip(
+                    q_source.get_trainable_variables(),
+                    q_target.get_trainable_variables()
+                )
+            ])
+        )
+        self._add_slot(
+            '_init_q_target',
+            updates=tf.group(*[
+                tf.assign(v_target, v_source)
+                for v_source, v_target in zip(
+                    a_source.get_trainable_variables(),
+                    a_target.get_trainable_variables()
+                )
+            ])
         )
 
+    def init(self):
+        self._init_a_target()
+        self._init_q_target()
+
+    def predict(self, s):
+        return self._predict([s])[0][0]
+
     def train(self, s, a, r, s_):
-        self.update_q_source(s, a, r, s_)
-        self.update_a_source(s)
-
-        self.update_q_target()
-        self.update_a_target()
-
-
-class ReplayMemory(object):
-
-    def __init__(self, buffer_size):
-        """Replay memory.
-
-        Args:
-            buffer_size (int): Max buffer size.
-
-        """
-        self._buffer_size = buffer_size
-        self._buffer = collections.deque()
-
-    def full(self):
-        return len(self._buffer) >= self._buffer_size
-
-    def put(self, s, a, r, s_, done):
-        """Put a transition tuple to the replay memory.
-
-        Args:
-            s (numpy.ndarray): State s_t.
-            a ((numpy.ndarray)): Action a_t.
-            r (float): Reward r_{t + 1}.
-            s_ (numpy.ndarray): Transition state s_{t + 1}.
-            done (bool): Is terminal?
-
-        """
-        self._buffer.append((s, a, r, s_, done))
-        if len(self._buffer) > self._buffer_size:
-            self._buffer.popleft()
-
-    def get(self, batch_size):
-        """Get a random batch of transitions from the memory.
-
-        Args:
-            batch_size (int): Batch size.
-
-        Returns:
-            list[tuple]: List of transition tuples.
-
-        """
-        columns = (list(), list(), list(), list(), list())
-        rows = random.sample(list(self._buffer), batch_size) if batch_size <= len(self._buffer) else self._buffer
-        for row in rows:
-            # for col in row:
-            #     print(col)
-            for i in range(5):
-                columns[i].append(row[i])
-        return columns
+        self._update_q_source(s, a, r, s_)
+        self._update_a_source(s)
+        self._update_q_target()
+        self._update_a_target()
 
 
 def main(args):
     model = Agent('agent', 3, 1)
     ph.initialize_global_variables()
     model.init()
-    replay = ReplayMemory(10000)
+    replay = core.ReplayMemory(10000)
 
     render = False
     var = 3.0
@@ -324,18 +281,15 @@ def main(args):
         for t in range(1000):
             if render:
                 env.render()
-            # time.sleep(0.1)
-            a = model.predict_a((s,))[0][0]
+
+            a = model.predict(s) * env.action_space.high
             a = np.clip(np.random.normal(a, var), -2, 2)
-            # print(a)
+
             s_, r, done, info = env.step(a)
             total_r += r
-            # print(s, a, r, s_, done)
             replay.put(s, a, r, s_, done)
 
-            # if replay.full():
-            batch = replay.get(32)[:-1]
-            model.train(*batch)
+            model.train(*replay.get(32)[:-1])
             var *= .9995
 
             s = s_

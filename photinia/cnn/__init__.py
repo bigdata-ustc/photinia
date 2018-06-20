@@ -2,10 +2,9 @@
 
 """
 @author: xi
-@since: 2017-12-19
+@since: 2018-06-20
 """
 
 from . import alexnet
 from . import dcae
-from . import seqae
 from . import vgg16
