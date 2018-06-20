@@ -90,7 +90,7 @@ class AlexNet(ph.Widget):
         self._fc8 = ph.Linear(
             'fc8',
             input_size=self._fc7.output_size, output_size=1000,
-            w_init=ph.RandomNormal(stddev=1e-4)
+            w_init=ph.init.RandomNormal(stddev=1e-4)
         )
         print(self._fc8.output_size)
 
@@ -102,7 +102,7 @@ class AlexNet(ph.Widget):
              self._conv3, tf.nn.relu,
              self._conv4, tf.nn.relu,
              self._conv5, tf.nn.relu, self._pool5,
-             ph.flatten,
+             ph.ops.flatten,
              self._fc6, tf.nn.relu,
              self._fc7, tf.nn.relu]
         )

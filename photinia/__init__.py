@@ -6,13 +6,13 @@
 """
 
 from .settings import *
-from .data import *
-from .deprecated import *
-from .initializers import *
-from .operations import *
-from .persistence import *
-from .regularizers import *
-from .training import *
-from .widgets import *
+from .core import *
+
+from . import ops
+from . import init
+from . import reg
+from . import io
+from . import train
+
 from . import utils
 from . import apps

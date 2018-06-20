@@ -18,7 +18,7 @@ import photinia
 import pickle
 
 
-class Model(photinia.Trainer):
+class Model(photinia.Model):
     """模型定义
     """
 
@@ -39,7 +39,7 @@ class Model(photinia.Trainer):
         self._voc_size = voc_size
         self._emb_size = emb_size
         self._state_size = state_size
-        photinia.Trainer.__init__(self, name, session)
+        photinia.Model.__init__(self, name, session)
 
     def _build(self):
         # 网络模块定义 --- build

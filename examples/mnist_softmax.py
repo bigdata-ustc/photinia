@@ -17,7 +17,7 @@ import numpy as np
 from examples import mnist
 
 
-class Model(photinia.Trainer):
+class Model(photinia.Model):
     """模型定义
     """
 

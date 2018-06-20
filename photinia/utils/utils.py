@@ -4,12 +4,14 @@
 @author: xi, anmx
 @since: 2017-04-23
 """
-
-import photinia as ph
+import collections
+import datetime as dt
+import pickle
 
 import numpy as np
-import pickle
 import tensorflow as tf
+
+import photinia as ph
 
 pickle_loads = pickle.loads
 pickle_dumps = pickle.dumps
@@ -149,21 +151,3 @@ def get_basename(name):
     if index_ == -1:
         index_ = len(name)
     return name[index + 1: index_]
-
-
-def dump_model_as_tree(widget, name):
-    ph.TreeDumper.get_instance().dump(widget, name)
-
-
-def load_model_from_tree(widget,
-                         name,
-                         path=None,
-                         strict=True):
-    """Load parameters into a model (or a part of the model) using TreeDumper.
-
-    :param widget: Target widget.
-    :param name: Tree path.
-    :param path:
-    :param strict:
-    """
-    ph.TreeDumper.get_instance().load(widget, name, path, strict)

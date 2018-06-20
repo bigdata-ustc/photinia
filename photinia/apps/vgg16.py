@@ -67,18 +67,18 @@ class VGG16(ph.Widget):
         #
         self._h1 = ph.Linear(
             'h1', self._p5.flat_size, 4096,
-            w_init=ph.RandomNormal(stddev=1e-4)
+            w_init=ph.init.RandomNormal(stddev=1e-4)
         )
         self._h2 = ph.Linear(
             'h2', self._h1.output_size, 4096,
-            w_init=ph.RandomNormal(stddev=1e-4)
+            w_init=ph.init.RandomNormal(stddev=1e-4)
         )
         self._h3 = ph.Linear(
             'h3', self._h2.output_size, self._output_size,
-            w_init=ph.RandomNormal(stddev=1e-4)
+            w_init=ph.init.RandomNormal(stddev=1e-4)
         )
 
-    def _setup(self, x, dropout=None, activation=ph.swish):
+    def _setup(self, x, dropout=None, activation=ph.ops.swish):
         s = activation
         y = ph.setup(
             x,
@@ -95,7 +95,7 @@ class VGG16(ph.Widget):
              self._c11, s, dropout,
              self._c12, s, dropout,
              self._c13, s, self._p5, dropout,
-             ph.flatten,
+             ph.ops.flatten,
              self._h1, s, dropout,
              self._h2, s, dropout,
              self._h3]

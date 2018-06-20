@@ -11,9 +11,9 @@ import threading
 import numpy as np
 import tensorflow as tf
 
-from . import initializers
-from . import operations
-from . import settings
+from .. import init
+from .. import ops
+from .. import settings
 
 
 def variable(name,
@@ -59,24 +59,21 @@ def placeholder(name,
         dtype (tf.DType): The type of elements in the tensor to be fed.
 
     Returns:
-        tf.Tensor: The placeholder tensor.
+        The placeholder tensor.
 
     """
     return tf.placeholder(name=name, shape=shape, dtype=dtype)
 
 
-class Widget(object):
-    """Widget
-    The basic component to form a model.
-    This an abstract class which can only be inherited.
+class Trainable(object):
+    """Trainable
+    A trainable object contains TensorFlow Variables.
     """
 
     LOCK = threading.Semaphore(1)
     INSTANCES = dict()
 
-    def __init__(self,
-                 name=None,
-                 build=True):
+    def __init__(self, name, build=True):
         """Construct a widget.
 
         Args:
@@ -133,10 +130,10 @@ class Widget(object):
         with tf.variable_scope(self._name):
             self._build()
             self._built = True
-        with Widget.LOCK:
-            if self._full_name in Widget.INSTANCES:
+        with self.LOCK:
+            if self._full_name in self.INSTANCES:
                 raise ValueError('Duplicated widget name %s.' % self._full_name)
-            Widget.INSTANCES[self._full_name] = self
+            self.INSTANCES[self._full_name] = self
         return self
 
     def _build(self):
@@ -150,46 +147,11 @@ class Widget(object):
         """
         raise NotImplementedError()
 
-    def setup(self, *args, **kwargs):
-        """Setup the widget.
-        "Setup" means to create a new series of operator in the TF graph, which can be called a "path".
-        No matter how many paths be created, the number of trainable variables is (and of course cannot) be changed.
-        They share the same parameters of the widget.
-
-        """
-        if not self._built:
-            raise RuntimeError('This widget has not been built. Please build first.')
-        if self._name is None:
-            #
-            # Setup only WITHOUT scope.
-            return self._setup(*args, **kwargs)
-        else:
-            #
-            # Setup only WITH scope.
-            with tf.variable_scope(self._prefix):
-                return self._setup(*args, **kwargs)
-
-    def _setup(self, *args, **kwargs):
-        """Setup the widget.
-        Abstract method.
-        All subclass must implement this method.
-
-        There is one task to be done in this method:
-        1) Construct the model's graph structure with TF.
-
-        In this method, you CANNOT create any trainable variables.
-
-        """
-        raise NotImplementedError()
-
-    def __call__(self, *args, **kwargs):
-        return self.setup(*args, **kwargs)
-
     def get_variables(self):
         """Get variables(tensors) of the widget.
 
         Returns:
-            list[tf.Tensor]: List of variables.
+            list: List of variables.
 
         """
         if self._name is None:
@@ -202,7 +164,7 @@ class Widget(object):
         """Get variables(tensors that marked as "trainable") of the widget.
 
         Returns:
-            list[tf.Tensor]: List of variables.
+            list: List of variables.
 
         """
         if self._name is None:
@@ -297,9 +259,9 @@ class Widget(object):
 
     def __getattr__(self, name):
         name = self._prefix + name
-        with Widget.LOCK:
-            if name in Widget.INSTANCES:
-                return Widget.INSTANCES[name]
+        with self.LOCK:
+            if name in self.INSTANCES:
+                return self.INSTANCES[name]
         if name.rfind(':') == -1:
             name += ':0'
         try:
@@ -309,6 +271,112 @@ class Widget(object):
 
     def __getitem__(self, name):
         return self.__getattr__(name)
+
+
+class Widget(Trainable):
+    """Widget
+    The basic component to form a model.
+    This an abstract class which can only be inherited.
+    """
+
+    def _build(self):
+        raise NotImplementedError()
+
+    def setup(self, *args, **kwargs):
+        """Setup the widget.
+        "Setup" means to create a new series of operator in the TF graph, which can be called a "path".
+        No matter how many paths be created, the number of trainable variables is (and of course cannot) be changed.
+        They share the same parameters of the widget.
+
+        """
+        if not self._built:
+            raise RuntimeError('This widget has not been built. Please build first.')
+        if self._name is None:
+            #
+            # Setup only WITHOUT scope.
+            return self._setup(*args, **kwargs)
+        else:
+            #
+            # Setup only WITH scope.
+            with tf.variable_scope(self._prefix):
+                return self._setup(*args, **kwargs)
+
+    def _setup(self, *args, **kwargs):
+        """Setup the widget.
+        Abstract method.
+        All subclass must implement this method.
+
+        There is one task to be done in this method:
+        1) Construct the model's graph structure with TF.
+
+        In this method, you CANNOT create any trainable variables.
+
+        """
+        raise NotImplementedError()
+
+    def __call__(self, *args, **kwargs):
+        return self.setup(*args, **kwargs)
+
+
+def setup(x, widget_list):
+    """Setup a series of widgets/ops with the given input "x".
+
+    Args:
+        x: The input tensor.
+        widget_list (list): List of widgets/ops.
+
+    Returns:
+        Output tensor.
+
+    """
+    if widget_list is None:
+        return x
+    if not isinstance(widget_list, (list, tuple)):
+        widget_list = [widget_list]
+    y = x
+    for w in widget_list:
+        if callable(w):
+            #
+            # Note that Widget is also callable.
+            y = w(y)
+        elif isinstance(w, (tuple, list)):
+            if len(w) != 2:
+                raise ValueError('The tuple must have two elements.')
+            fn = w[0]
+            if not callable(fn):
+                raise ValueError('%s is not callable.' % str(fn))
+            if isinstance(w[1], dict):
+                kwargs = w[1]
+                y = fn(y, **kwargs)
+            elif isinstance(w[1], str):
+                y = fn(y, name=w[1])
+            else:
+                raise ValueError('The second term of the tuple must be str or dict.')
+        elif w is None:
+            continue
+        else:
+            raise ValueError('%s is not callable.' % str(w))
+    return y
+
+
+def setup_sequence(seq, widget_list):
+    """Setup a series of widgets/ops with the given sequence "seq".
+
+    Args:
+        seq: Tensor represents a sequence shaped (batch_size, seq_length, ...).
+        widget_list (list): List of widgets/ops.
+
+    Returns:
+        tf.Tensor: Output tensor.
+
+    """
+    seq = ops.transpose_sequence(seq)
+    y = tf.map_fn(
+        fn=lambda elem: setup(elem, widget_list),
+        elems=seq
+    )
+    y = ops.transpose_sequence(y)
+    return y
 
 
 class Linear(Widget):
@@ -321,8 +389,8 @@ class Linear(Widget):
                  input_size,
                  output_size,
                  with_bias=True,
-                 w_init=initializers.GlorotUniform(),
-                 b_init=initializers.Zeros()):
+                 w_init=init.GlorotUniform(),
+                 b_init=init.Zeros()):
         """Linear layer.
 
         y = Wx + b
@@ -332,7 +400,7 @@ class Linear(Widget):
             input_size (int): Input size.
             output_size (int): Output size.
             with_bias (bool): If the layer contains bias.
-            w_init (initializers.Initializer): Weight initializer.
+            w_init (init.Initializer): Weight initializer.
             b_init (initializers.Initializer): Bias initializer.
 
         """
@@ -448,21 +516,21 @@ class Conv2D(Widget):
                  stride_height=1,
                  stride_width=1,
                  padding='SAME',
-                 w_init=initializers.TruncatedNormal(),
-                 b_init=initializers.Zeros(),
+                 w_init=init.TruncatedNormal(),
+                 b_init=init.Zeros(),
                  flat_output=False):
         """2D convolutional layer
 
         Args:
             name (str): Widget name.
-            input_size (tuple[int]): Input size.
+            input_size (tuple[int]|list[int]): Input size.
             output_channels (int): Numbers of output channels.
             filter_height (int): Filter height.
             filter_width (int): Filter width.
             stride_height (int): Stride height.
             stride_width (int): Stride width.
             padding (str): Padding type. Should be one of {"SAME", "VALID"}. Default is "SAME".
-            w_init (initializers.Initializer): Weight(Kernel) initializer.
+            w_init (init.Initializer): Weight(Kernel) initializer.
             b_init (initializers.Initializer): Bias initializer.
             flat_output (bool): If True, the output will be converted into flat vector(with shape batch_size * dim).
 
@@ -617,7 +685,7 @@ class Pool2D(Widget):
 
         Args:
             name (str): Widget name.
-            input_size (tuple[int]): Input size.
+            input_size (tuple[int]|list[int]): Input size.
             filter_height (int): Filter height.
             filter_width (int): Filter width.
             stride_height (int): Stride height.
@@ -730,8 +798,8 @@ class GroupConv2D(Widget):
                  stride_width=1,
                  padding='SAME',
                  data_format='NHWC',
-                 w_init=initializers.TruncatedNormal(),
-                 b_init=initializers.Zeros(),
+                 w_init=init.TruncatedNormal(),
+                 b_init=init.Zeros(),
                  flat_output=False):
         if not (isinstance(input_size, (tuple, list)) and len(input_size) == 3):
             raise ValueError('input_size should be tuple or list with 3 elements.')
@@ -882,21 +950,21 @@ class Conv2DTrans(Widget):
                  stride_height=2,
                  stride_width=2,
                  data_format='NHWC',
-                 w_init=initializers.TruncatedNormal(),
-                 b_init=initializers.Zeros(),
+                 w_init=init.TruncatedNormal(),
+                 b_init=init.Zeros(),
                  flat_input=False):
         """Transpose convolutional layer for 2D.
 
         Args:
             name (str): Widget name.
-            output_size (tuple[int]): Output size.
+            output_size (tuple[int]|list[int]): Output size.
             input_channels (int): Input size.
             filter_height (int): Filter height.
             filter_width (int): Filter width.
             stride_height (int): Stride height.
             stride_width (int): Stride width.
             data_format (str): Data format. 'NHWC' and 'NCHW' are supported.
-            w_init (initializers.Initializer): Weight(Kernel) initializer.
+            w_init (init.Initializer): Weight(Kernel) initializer.
             b_init (initializers.Initializer): Bias initializer.
             flat_input (bool): If True, the output will be converted into flat vector(with shape batch_size * dim).
 
@@ -1041,9 +1109,9 @@ class GRUCell(Widget):
                  state_size,
                  with_bias=False,
                  activation=tf.nn.tanh,
-                 w_init=initializers.TruncatedNormal(0, 1e-3),
-                 u_init=initializers.TruncatedNormal(0, 1e-3),
-                 b_init=initializers.Zeros()):
+                 w_init=init.TruncatedNormal(0, 1e-3),
+                 u_init=init.TruncatedNormal(0, 1e-3),
+                 b_init=init.Zeros()):
         """Construct a cell.
         Does not create the parameters' tensors.
 
@@ -1231,7 +1299,7 @@ class GRUCell(Widget):
         :param init_state: Initial state tensor.
         :return: Output States.
         """
-        seq = operations.transpose_sequence(seq)
+        seq = ops.transpose_sequence(seq)
         if init_state is None:
             batch_size = tf.shape(seq)[1]
             init_state = tf.zeros(
@@ -1241,12 +1309,12 @@ class GRUCell(Widget):
             )
 
         def fn(acc, elem):
-            cell_input = operations.setup(elem, input_widgets)
+            cell_input = setup(elem, input_widgets)
             state = self.setup(cell_input, acc)
             if output_widgets is None:
                 return state
             else:
-                output = operations.setup(state, output_widgets)
+                output = setup(state, output_widgets)
                 return state, output
 
         states_outputs = tf.scan(
@@ -1256,11 +1324,11 @@ class GRUCell(Widget):
         )
 
         if output_widgets is None:
-            states = operations.transpose_sequence(states_outputs, name='states')
+            states = ops.transpose_sequence(states_outputs, name='states')
             return states
         else:
-            states = operations.transpose_sequence(states_outputs[0], name='states')
-            outputs = operations.transpose_sequence(states_outputs[1], name='outputs')
+            states = ops.transpose_sequence(states_outputs[0], name='states')
+            outputs = ops.transpose_sequence(states_outputs[1], name='outputs')
             return states, outputs
 
     def setup_recursive(self,
@@ -1298,9 +1366,9 @@ class GRUCell(Widget):
 
         def fn_recursive(acc, _):
             prev_state, prev_output = acc
-            cell_input = operations.setup(prev_output, input_widgets)
+            cell_input = setup(prev_output, input_widgets)
             state = self.setup(cell_input, prev_state)
-            output = operations.setup(state, output_widgets)
+            output = setup(state, output_widgets)
             return state, output
 
         states, outputs = tf.scan(
@@ -1309,8 +1377,8 @@ class GRUCell(Widget):
             initializer=(init_state, init_input)
         )
 
-        states = operations.transpose_sequence(states, name='states')
-        outputs = operations.transpose_sequence(outputs, name='outputs')
+        states = ops.transpose_sequence(states, name='states')
+        outputs = ops.transpose_sequence(outputs, name='outputs')
         return states, outputs
 
 
@@ -1322,9 +1390,9 @@ class LSTMCell(Widget):
                  state_size,
                  with_bias=True,
                  activation=tf.nn.tanh,
-                 w_init=initializers.TruncatedNormal(0, 1e-3),
-                 u_init=initializers.TruncatedNormal(0, 1e-3),
-                 b_init=initializers.Zeros()):
+                 w_init=init.TruncatedNormal(0, 1e-3),
+                 u_init=init.TruncatedNormal(0, 1e-3),
+                 b_init=init.Zeros()):
         """LSTM cell.
 
         Args:
@@ -1333,7 +1401,7 @@ class LSTMCell(Widget):
             state_size (int): State size.
             with_bias (bool): If True, the cell will involve biases.
             activation: Activation function.
-            w_init (initializers.Initializer): Input weight initializer.
+            w_init (init.Initializer): Input weight initializer.
             u_init (initializers.Initializer): Recurrent weight initializer.
             b_init (initializers.Initializer): Bias initializer.
 
@@ -1578,7 +1646,7 @@ class LSTMCell(Widget):
                 (batch_size, seq_length, output_size)
 
         """
-        seq = operations.transpose_sequence(seq)
+        seq = ops.transpose_sequence(seq)
         if init_cell_state is None:
             batch_size = tf.shape(seq)[1]
             init_cell_state = tf.zeros(
@@ -1594,12 +1662,12 @@ class LSTMCell(Widget):
                 name='init_state'
             )
         _, states = tf.scan(
-            fn=lambda acc, elem: self.setup(operations.setup(elem, widgets), acc[0], acc[1]),
+            fn=lambda acc, elem: self.setup(setup(elem, widgets), acc[0], acc[1]),
             elems=seq,
             initializer=(init_cell_state, init_state)
         )
         # cell_states = operations.transpose_sequence(cell_states, name='cell_states')
-        states = operations.transpose_sequence(states, name='states')
+        states = ops.transpose_sequence(states, name='states')
         return states
 
     def setup_recursive(self,
@@ -1653,9 +1721,9 @@ class LSTMCell(Widget):
 
         def fn_recursive(acc, _):
             prev_cell_state, prev_state, prev_output = acc
-            cell_input = operations.setup(prev_output, input_widgets)
+            cell_input = setup(prev_output, input_widgets)
             cell_state, state = self.setup(cell_input, prev_cell_state, prev_state)
-            output = operations.setup(state, output_widgets)
+            output = setup(state, output_widgets)
             return cell_state, state, output
 
         _, states, outputs = tf.scan(
@@ -1665,8 +1733,8 @@ class LSTMCell(Widget):
         )
 
         # cell_states = operations.transpose_sequence(cell_states, name='cell_states')
-        states = operations.transpose_sequence(states, name='states')
-        outputs = operations.transpose_sequence(outputs, name='outputs')
+        states = ops.transpose_sequence(states, name='states')
+        outputs = ops.transpose_sequence(outputs, name='outputs')
         return states, outputs
 
 
@@ -1763,9 +1831,9 @@ class SoftAttention(Widget):
                  seq_elem_size,
                  vec_size,
                  common_size,
-                 seq_weight_initializer=initializers.GlorotUniform(),
-                 context_weight_initializer=initializers.GlorotUniform(),
-                 omega_initializer=initializers.GlorotUniform()):
+                 seq_weight_initializer=init.GlorotUniform(),
+                 context_weight_initializer=init.GlorotUniform(),
+                 omega_initializer=init.GlorotUniform()):
         self._seq_elem_size = seq_elem_size
         self._vec_size = vec_size
         self._common_size = common_size
@@ -1837,7 +1905,7 @@ class SoftAttention(Widget):
         """
         #
         # (batch_size, seq_length, seq_elem_size) -> (seq_length, batch_size, seq_elem_size)
-        seq = operations.transpose_sequence(seq)
+        seq = ops.transpose_sequence(seq)
         #
         # (seq_length, batch_size, seq_elem_size) @ (seq_elem_size, common_size)
         # -> (seq_length, batch_size, common_size)
@@ -1876,8 +1944,8 @@ class Gate(Widget):
                  name,
                  input_sizes,
                  output_size,
-                 w_init=initializers.TruncatedNormal(0.0, 1e-3),
-                 b_init=initializers.Zeros()):
+                 w_init=init.TruncatedNormal(0.0, 1e-3),
+                 b_init=init.Zeros()):
         if not isinstance(input_sizes, (tuple, list)):
             input_sizes = (input_sizes,)
         self._input_sizes = input_sizes
@@ -1918,15 +1986,15 @@ class ResidualLinear(Widget):
                  name,
                  size,
                  num_layers=1,
-                 w_init=initializers.GlorotUniform(),
-                 b_init=initializers.GlorotUniform()):
+                 w_init=init.GlorotUniform(),
+                 b_init=init.GlorotUniform()):
         """Residual network cell for DNN.
 
         Args:
             name (str): Widget name.
             size (int): Input and output size.
             num_layers (int): Number of layers.
-            w_init (initializers.Initializer): Initializer for weight.
+            w_init (init.Initializer): Initializer for weight.
             b_init (initializers.Initializer): Initializer for bias.
 
         """
@@ -1960,7 +2028,7 @@ class ResidualLinear(Widget):
             )
             self._layers.append(layer)
 
-    def _setup(self, x, activation=operations.lrelu):
+    def _setup(self, x, activation=ops.lrelu):
         """Setup.
 
         Args:
@@ -1992,14 +2060,14 @@ class HighWayLinear(Widget):
     def __init__(self,
                  name,
                  size,
-                 w_init=initializers.GlorotUniform(),
-                 b_init=initializers.GlorotUniform()):
+                 w_init=init.GlorotUniform(),
+                 b_init=init.GlorotUniform()):
         """Highway network cell for DNN.
 
         Args:
             name (str): Widget name.
             size (int): Input and output size.
-            w_init (initializers.Initializer): Initializer for weight.
+            w_init (init.Initializer): Initializer for weight.
             b_init (initializers.Initializer): Initializer for bias.
 
         """
@@ -2024,7 +2092,7 @@ class HighWayLinear(Widget):
             b_init=self._b_init
         )
 
-    def _setup(self, x, activation=operations.lrelu):
+    def _setup(self, x, activation=ops.lrelu):
         """Setup.
 
         Args:

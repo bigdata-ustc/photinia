@@ -5,7 +5,6 @@
 @since: 2017-12-25
 """
 
-import os
 import random
 
 import numpy as np
@@ -94,119 +93,6 @@ def save_mat(fn_or_fp, mat):
     """
     array = mat_to_array(mat)
     save_array(fn_or_fp, array)
-
-
-class BufferedImageSource(ph.DataSource):
-    """Image data source.
-    """
-
-    def __init__(self,
-                 image_dir,
-                 height,
-                 width,
-                 depth=3,
-                 buffer_size=0):
-        self._height = height
-        self._width = width
-        self._depth = depth
-        self._buffer_size = buffer_size
-        #
-        file_list = [os.path.join(image_dir, img_file) for img_file in os.listdir(image_dir)]
-        self._dataset = ph.Dataset(file_list).shuffle()
-        self._buffer = {}
-
-    def next_batch(self, size=0):
-        mat_list = []
-        image_files, = self._dataset.next_batch(size)
-        for i, image_file in enumerate(image_files):
-            if image_file in self._buffer:
-                mat = self._buffer[image_file]
-            else:
-                mat = load_as_mat(image_file, self._width, self._height)
-                mat = mat.reshape((self._width, self._height, self._depth))
-                self._buffer[image_file] = mat
-                if 0 < self._buffer_size < len(self._buffer):
-                    self._buffer.popitem()
-            mat_list.append(mat)
-        return mat_list,
-
-
-class ImageSourceWithLabels(ph.DataSource):
-    """Image data source.
-    """
-
-    def __init__(self,
-                 image_dir,
-                 height,
-                 width,
-                 depth,
-                 num_classes,
-                 buffer_size=0):
-        self._height = height
-        self._width = width
-        self._depth = depth
-        self._num_classes = num_classes
-        self._buffer_size = buffer_size
-        #
-        file_list = [
-            os.path.join(image_dir, img_file)
-            for img_file in os.listdir(image_dir)
-            if not img_file.endswith('.txt')
-        ]
-        self._dataset = ph.Dataset(file_list).shuffle()
-        self._buffer = {}
-
-    def next_batch(self, size=0):
-        mat_list = []
-        onehot_list = []
-        files, = self._dataset.next_batch(size)
-        for i, file_ in enumerate(files):
-            if file_ in self._buffer:
-                mat, onehot = self._buffer[file_]
-            else:
-                mat = load_as_mat(file_, self._height, self._width)
-                mat = mat.reshape((self._height, self._width, self._depth))
-                with open(os.path.splitext(file_)[0] + '.txt', 'rt') as f:
-                    label = int(f.readline())
-                onehot = np.zeros((self._num_classes,), dtype=np.float32)
-                onehot[label % self._num_classes] = 1.0
-                self._buffer[file_] = (mat, onehot)
-                if 0 < self._buffer_size < len(self._buffer):
-                    self._buffer.popitem()
-            mat_list.append(mat)
-            onehot_list.append(onehot)
-        return mat_list, onehot_list
-
-
-class ImageSource(ph.DataSource):
-    """Image data source.
-    """
-
-    def __init__(self,
-                 image_dir,
-                 height,
-                 width,
-                 channels):
-        self._height = height
-        self._width = width
-        self._channels = channels
-        #
-        file_list = [
-            os.path.join(image_dir, file_) for file_ in os.listdir(image_dir)
-        ]
-        file_list = [file_ for file_ in file_list if os.path.isfile(file_)]
-        self._dataset = ph.Dataset(file_list).shuffle()
-
-    def next_batch(self, size=0):
-        mat_list = np.zeros((size, self._height, self._width, self._channels), dtype=np.float32)
-        image_files, = self._dataset.next_batch(size)
-        for i, image_file in enumerate(image_files):
-            try:
-                mat_list[i] = load_as_mat(image_file, self._width, self._height)
-            except Exception as e:
-                print(e)
-                continue
-        return mat_list,
 
 
 def _trans_mat_offset_center(mat, x, y):
@@ -565,27 +451,3 @@ def default_augmentation_filter():
     filter_.add_filter(RandomZoomFilter((0.8, 1.5)))
     filter_.add_filter(RandomChannelFilter(0.4))
     return filter_
-
-
-class AugmentedImageSource(ph.DataSource):
-
-    def __init__(self,
-                 data_source,
-                 image_col=0):
-        self._data_source = data_source
-        self._image_col = image_col
-        filter_ = RandomComboFilter()
-        self._filter = filter_
-        filter_.add_filter(RandomRotationFilter(30))
-        filter_.add_filter(RandomShearFilter(0.5))
-        filter_.add_filter(RandomZoomFilter((0.8, 1.5)))
-        filter_.add_filter(RandomChannelFilter(0.4))
-
-    def next_batch(self, size=0):
-        data_batch = self._data_source.next_batch(size)
-        mat_batch = data_batch[self._image_col]
-        mat_batch = np.array(
-            [self._filter(mat) for mat in mat_batch],
-            dtype=np.float32
-        )
-        return tuple(col if i != self._image_col else mat_batch for i, col in enumerate(data_batch))

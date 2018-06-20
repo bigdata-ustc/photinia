@@ -16,7 +16,7 @@ import tensorflow as tf
 from examples import mnist
 
 
-class Model(photinia.Trainer):
+class Model(photinia.Model):
     """模型定义
     """
 

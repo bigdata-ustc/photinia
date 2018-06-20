@@ -104,14 +104,3 @@ def pad_sequences(array_list, dtype=np.float32):
         for j, row in enumerate(arr):
             ret[i, j] = row
     return ret
-
-# if __name__ == '__main__':
-#     with pymongo.MongoClient('uichost:38324') as client:
-#         client['admin'].authenticate('root', 'SELECT * FROM password;')
-#         db = client['reviews']
-#         coll = db['glove_twitter']
-#         we = WordEmbedding(coll)
-#         sentence = 'Where is your sexy girl ?'
-#         print(sentence)
-#         for _ in range(10):
-#             print(len(we.words_to_vectors(sentence, delimiter=' ')))

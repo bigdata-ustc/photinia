@@ -23,8 +23,8 @@ class Encoder(ph.Widget):
                  num_layers=5,
                  kernel_size=5,
                  output_channels1=32,
-                 w_init=ph.TruncatedNormal(),
-                 b_init=ph.Zeros()):
+                 w_init=ph.init.TruncatedNormal(),
+                 b_init=ph.init.Zeros()):
         self._height = height
         self._width = width
         self._channels = channels
@@ -70,12 +70,12 @@ class Encoder(ph.Widget):
             output_channels *= 2
         self._fc = ph.Linear('fc', self._layers[-1].flat_size, self._output_size)
 
-    def _setup(self, x, activation=ph.lrelu):
+    def _setup(self, x, activation=ph.ops.lrelu):
         widget_list = list()
         for layer in self._layers:
             widget_list.append(layer)
             widget_list.append(activation)
-        widget_list += [ph.flatten, self._fc, tf.nn.tanh]
+        widget_list += [ph.ops.flatten, self._fc, tf.nn.tanh]
         y = ph.setup(x, widget_list)
         return y
 
@@ -100,8 +100,8 @@ class Decoder(ph.Widget):
                  num_layers=5,
                  kernel_size=5,
                  input_channels1=32,
-                 w_init=ph.TruncatedNormal(),
-                 b_init=ph.Zeros()):
+                 w_init=ph.init.TruncatedNormal(),
+                 b_init=ph.init.Zeros()):
         self._height = height
         self._width = width
         self._channels = channels
@@ -147,7 +147,7 @@ class Decoder(ph.Widget):
             input_channels *= 2
         self._fc = ph.Linear('fc', self._input_size, self._layers[-1].flat_size)
 
-    def _setup(self, x, activation=ph.lrelu, dropout=None):
+    def _setup(self, x, activation=ph.ops.lrelu, dropout=None):
         widget_list = [
             dropout,
             self._fc, activation,
@@ -161,7 +161,7 @@ class Decoder(ph.Widget):
         return y
 
 
-class Trainer(ph.Trainer):
+class Model(ph.Model):
 
     def __init__(self,
                  name,
@@ -198,7 +198,7 @@ class Trainer(ph.Trainer):
         self._channels1 = channels1
         self._optimizer = optimizer
         self._reg = reg
-        super(Trainer, self).__init__(name)
+        super(Model, self).__init__(name)
 
     @property
     def height(self):
@@ -233,8 +233,8 @@ class Trainer(ph.Trainer):
         self._decoder = decoder
 
         x = ph.placeholder('x', (None, self._height, self._width, self._channels))
-        h = encoder.setup(x, activation=ph.lrelu)
-        x_ = decoder.setup(h, activation=ph.lrelu)
+        h = encoder.setup(x, activation=ph.ops.lrelu)
+        x_ = decoder.setup(h, activation=ph.ops.lrelu)
         self._x = x
         self._h = h
         self._x_ = x_
@@ -242,18 +242,18 @@ class Trainer(ph.Trainer):
         loss = tf.reduce_mean((x_ - x) ** 2)
         self._loss = loss
 
-        reg = ph.Regularizer()
+        reg = ph.reg.Regularizer()
         reg.add_l1_l2(self.get_trainable_variables())
 
         update = self._optimizer.minimize(loss + reg.get_loss(self._reg) if self._reg > 0 else loss)
         self._add_slot(
-            ph.TRAIN,
+            'train',
             inputs=x,
             outputs={'y': x_, 'loss': loss},
             updates=update
         )
         self._add_slot(
-            ph.PREDICT,
+            'predict',
             inputs=x,
             outputs={'h': h, 'y': x_, 'loss': loss}
         )
