@@ -7,7 +7,6 @@
 
 import argparse
 
-import gym
 import numpy as np
 import tensorflow as tf
 
@@ -17,7 +16,7 @@ from . import core
 
 class Actor(ph.Widget):
 
-    def __init__(self, name, state_size, action_size, hidden_size=100):
+    def __init__(self, name, state_size, action_size, hidden_size=50):
         self._state_size = state_size
         self._action_size = action_size
         self._hidden_size = hidden_size
@@ -43,6 +42,11 @@ class Actor(ph.Widget):
         )
         self._layer2 = ph.Linear(
             'layer2',
+            self._hidden_size, self._hidden_size,
+            w_init=ph.init.TruncatedNormal(0.0, 1e-2)
+        )
+        self._layer3 = ph.Linear(
+            'layer3',
             self._hidden_size, self._action_size,
             w_init=ph.init.TruncatedNormal(0.0, 1e-2)
         )
@@ -51,7 +55,8 @@ class Actor(ph.Widget):
         return ph.setup(
             state, [
                 self._layer1, ph.ops.lrelu,
-                self._layer2,
+                self._layer2, ph.ops.lrelu,
+                self._layer3,
                 tf.nn.tanh
             ]
         )
@@ -59,7 +64,7 @@ class Actor(ph.Widget):
 
 class Critic(ph.Widget):
 
-    def __init__(self, name, state_size, action_size, hidden_size=100):
+    def __init__(self, name, state_size, action_size, hidden_size=50):
         self._state_size = state_size
         self._action_size = action_size
         self._hidden_size = hidden_size
@@ -85,6 +90,11 @@ class Critic(ph.Widget):
         )
         self._layer2 = ph.Linear(
             'layer2',
+            self._hidden_size, self._hidden_size,
+            w_init=ph.init.TruncatedNormal(0.0, 1e-2)
+        )
+        self._layer3 = ph.Linear(
+            'layer3',
             self._hidden_size, 1,
             w_init=ph.init.TruncatedNormal(0.0, 1e-2)
         )
@@ -93,7 +103,8 @@ class Critic(ph.Widget):
         return ph.setup(
             tf.concat((state, action), axis=1), [
                 self._layer1, ph.ops.lrelu,
-                self._layer2,
+                self._layer2, ph.ops.lrelu,
+                self._layer3,
                 (tf.reshape, {'shape': (-1,)})
             ]
         )
@@ -180,8 +191,8 @@ class Agent(ph.Model):
             '_update_q_source',
             inputs=(s_in, a_source_pred, r_in, s_in_),
             outputs=loss,
-            updates=tf.train.AdamOptimizer(1e-3).minimize(
-                loss + reg.get_loss(1e-7),
+            updates=tf.train.RMSPropOptimizer(1e-4, 0.9, 0.9).minimize(
+                loss + reg.get_loss(1e-6),
                 var_list=var_list
             )
         )
@@ -195,16 +206,16 @@ class Agent(ph.Model):
         #         a_source_pred
         #     )[0]
         # )
+        # updates=tf.train.AdamOptimizer(-1e-3).apply_gradients(
+        #     zip(grad_policy, var_list)
+        # ),
         loss = tf.reduce_mean(q_source_pred)
         reg = ph.reg.Regularizer().add_l1_l2(var_list)
         self._add_slot(
             '_update_a_source',
             inputs=s_in,
-            # updates=tf.train.AdamOptimizer(-1e-3).apply_gradients(
-            #     zip(grad_policy, var_list)
-            # ),
-            updates=tf.train.AdamOptimizer(1e-3).minimize(
-                -loss + reg.get_loss(1e-7),
+            updates=tf.train.RMSPropOptimizer(1e-4, 0.9, 0.9).minimize(
+                -loss + reg.get_loss(1e-6),
                 var_list=var_list
             )
         )
@@ -267,6 +278,7 @@ class Agent(ph.Model):
 
 
 def main(args):
+    import gym
     model = Agent('agent', 3, 1)
     ph.initialize_global_variables()
     model.init()

@@ -5,7 +5,6 @@
 @since: 2018-06-20
 """
 
-import collections
 import random
 
 
@@ -19,7 +18,8 @@ class ReplayMemory(object):
 
         """
         self._buffer_size = buffer_size
-        self._buffer = collections.deque()
+        self._buffer = list()
+        self._pointer = 0
 
     def full(self):
         return len(self._buffer) >= self._buffer_size
@@ -35,9 +35,12 @@ class ReplayMemory(object):
             done (bool): Is terminal?
 
         """
-        self._buffer.append((s, a, r, s_, done))
-        if len(self._buffer) > self._buffer_size:
-            self._buffer.popleft()
+        row = (s, a, r, s_, done)
+        if len(self._buffer) < self._buffer_size:
+            self._buffer.append(row)
+        else:
+            self._buffer[self._pointer] = row
+            self._pointer = (self._pointer + 1) % self._buffer_size
 
     def get(self, batch_size):
         """Get a random batch of transitions from the memory.
@@ -49,11 +52,12 @@ class ReplayMemory(object):
             list[tuple]: List of transition tuples.
 
         """
+        if batch_size <= len(self._buffer):
+            rows = random.sample(list(self._buffer), batch_size)
+        else:
+            rows = self._buffer
         columns = (list(), list(), list(), list(), list())
-        rows = random.sample(list(self._buffer), batch_size) if batch_size <= len(self._buffer) else self._buffer
         for row in rows:
-            # for col in row:
-            #     print(col)
             for i in range(5):
                 columns[i].append(row[i])
         return columns
