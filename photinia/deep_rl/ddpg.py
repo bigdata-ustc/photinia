@@ -121,7 +121,8 @@ class Agent(ph.Model):
                  critic_type=Critic,
                  critic_args=None,
                  gamma=0.9,
-                 tao=0.01):
+                 tao=0.01,
+                 replay_size=10000):
         """
 
         Args:
@@ -142,6 +143,7 @@ class Agent(ph.Model):
         self._critic_args = critic_args if critic_args is not None else {}
         self._gamma = gamma
         self._tao = tao
+        self._replay = core.ReplayMemory(replay_size)
         super(Agent, self).__init__(name)
 
     def _build(self):
@@ -270,7 +272,11 @@ class Agent(ph.Model):
     def predict(self, s):
         return self._predict([s])[0][0]
 
-    def train(self, s, a, r, s_):
+    def feedback(self, s, a, r, s_, done=False):
+        self._replay.put(s, a, r, s_, done)
+
+    def train(self, batch_size=32):
+        s, a, r, s_ = self._replay.get(batch_size)[:-1]
         self._update_q_source(s, a, r, s_)
         self._update_a_source(s)
         self._update_q_target()
@@ -282,7 +288,6 @@ def main(args):
     model = Agent('agent', 3, 1)
     ph.initialize_global_variables()
     model.init()
-    replay = core.ReplayMemory(10000)
 
     render = False
     var = 3.0
@@ -298,12 +303,12 @@ def main(args):
             a = np.clip(np.random.normal(a, var), -2, 2)
 
             s_, r, done, info = env.step(a)
+
+            model.feedback(s, a, r, s_)
+            model.train()
+
             total_r += r
-            replay.put(s, a, r, s_, done)
-
-            model.train(*replay.get(32)[:-1])
             var *= .9995
-
             s = s_
             if done:
                 print('[%d] %f' % (i, total_r))
@@ -316,6 +321,5 @@ def main(args):
 if __name__ == '__main__':
     _parser = argparse.ArgumentParser()
     #
-    # TODO: Define more args here.
     _args = _parser.parse_args()
     exit(main(_args))
