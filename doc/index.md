@@ -1,10 +1,12 @@
 # Photinia
 
-We believe that building an AI system has no difference to creating life.
-The project of Photinia let you experience the pleasure of creating life and make the essence of life deep into your soul.
+We believe that building an AI system has no difference to creating life. The tedious underlying construction will impede the pace of implementation.
+The project is dedicated to the rapid implementation of inspiration, more convenient and flexible. You can be more focused on the process of building life.
 
-我们相信，构建智能体无异于创造生命。
-石楠花项目就是要让你体验创造生命的快感，并使生命之精髓深入灵魂。
+
+我们相信，构建智能体无异于创造生命，繁琐的底层构建将阻碍实现的步伐。
+石楠花项目致力于灵感的极速实现，更方便，更灵活，让你更加专注于构建生命的过程
+
 
 ## 项目构成
 
