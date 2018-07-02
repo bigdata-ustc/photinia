@@ -5,7 +5,7 @@
 @since: 2017-04-08
 """
 
-from .settings import *
+from .conf import *
 from .core import *
 
 from . import ops

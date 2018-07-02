@@ -9,9 +9,8 @@ import collections
 
 import tensorflow as tf
 
+from . import context
 from . import widgets
-from .. import ops
-from .. import settings
 
 
 class Slot(object):
@@ -37,7 +36,7 @@ class Slot(object):
             callbacks (list[(Any) -> None]|tuple[(Any) -> None]|(Any) -> None): Callback(s)
 
         """
-        self._session = settings.get_session()
+        self._session = context.get_session()
         #
         # Inputs.
         if inputs is None:

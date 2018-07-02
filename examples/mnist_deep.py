@@ -59,10 +59,10 @@ class Model(photinia.Model):
         self._lin1 = photinia.Linear('LINEAR1', self._cnn.flat_size, self._feature_size)
         self._lin2 = photinia.Linear('LINEAR2', self._feature_size, self._num_classes)
         # dropout参数
-        keep_prob = tf.placeholder(dtype=photinia.D_TYPE)
+        keep_prob = tf.placeholder(dtype=photinia.dtype)
         # 输入
-        x = tf.placeholder(dtype=photinia.D_TYPE, shape=[None, self._height, self._width, self._depth])
-        y_ = tf.placeholder(dtype=photinia.D_TYPE, shape=[None, self._num_classes])
+        x = tf.placeholder(dtype=photinia.dtype, shape=[None, self._height, self._width, self._depth])
+        y_ = tf.placeholder(dtype=photinia.dtype, shape=[None, self._num_classes])
         # 网络结构定义 --- setup
         y = self._cnn.setup(x)
         y = self._lin1.setup(y)
@@ -72,7 +72,7 @@ class Model(photinia.Model):
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y))
         # accuracy计算
         correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, photinia.D_TYPE))
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, photinia.dtype))
         # 设置训练和预测的slot
         self._add_slot(
             'train',

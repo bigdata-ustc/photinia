@@ -11,9 +11,10 @@ import threading
 import numpy as np
 import tensorflow as tf
 
+from . import context
+from .. import conf
 from .. import init
 from .. import ops
-from .. import settings
 
 
 def variable(name,
@@ -42,13 +43,13 @@ def variable(name,
         name=name,
         initial_value=initial_value,
         trainable=trainable,
-        dtype=settings.D_TYPE
+        dtype=conf.dtype
     )
 
 
 def placeholder(name,
                 shape,
-                dtype=settings.D_TYPE):
+                dtype=conf.dtype):
     """Create a placeholder.
     Shortcut to "tf.placeholder()".
 
@@ -205,7 +206,7 @@ class Trainable(object):
         """
         var_list = self.get_trainable_variables()
         param_dict = {var.name: var for var in var_list}
-        param_dict = settings.get_session().run(param_dict)
+        param_dict = context.get_session().run(param_dict)
         return param_dict
 
     def set_parameters(self, param_dict, strict=True):
@@ -222,7 +223,7 @@ class Trainable(object):
         """
         var_list = self.get_trainable_variables()
         var_dict = {var.name: var for var in var_list}
-        session = settings.get_session()
+        session = context.get_session()
         for name, value in param_dict.items():
             if name not in var_dict:
                 if strict:
@@ -432,14 +433,14 @@ class Linear(Widget):
             self._w_init.build(
                 shape=(self._input_size, self._output_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='w'
         )
         self._b = tf.Variable(
             self._b_init.build(
                 shape=(self._output_size,)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='b'
         ) if self._with_bias else None
 
@@ -489,7 +490,7 @@ class Dropout(Widget):
         if self._keep_prob is None:
             self._keep_prob = tf.placeholder(
                 shape=(),
-                dtype=settings.D_TYPE
+                dtype=conf.dtype
             )
 
     def _setup(self, x):
@@ -629,14 +630,14 @@ class Conv2D(Widget):
                     self._output_channels
                 )
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='w'
         )
         self._b = tf.Variable(
             self._b_init.build(
                 shape=(self._output_channels,)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='b'
         )
 
@@ -901,14 +902,14 @@ class GroupConv2D(Widget):
                     self._output_channels
                 )
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='w'
         )
         self._b = tf.Variable(
             self._b_init.build(
                 shape=(self._output_channels,)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='b'
         )
 
@@ -1051,14 +1052,14 @@ class Conv2DTrans(Widget):
                     self._input_channels
                 )
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='w'
         )
         self._b = tf.Variable(
             self._b_init.build(
                 shape=(self._output_channels,)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='b'
         )
 
@@ -1157,21 +1158,21 @@ class GRUCell(Widget):
             self._w_init.build(
                 shape=(self._input_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='wz'
         )
         self._wr = tf.Variable(
             self._w_init.build(
                 shape=(self._input_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='wr'
         )
         self._wh = tf.Variable(
             self._w_init.build(
                 shape=(self._input_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='wh'
         )
         #
@@ -1179,21 +1180,21 @@ class GRUCell(Widget):
             self._u_init.build(
                 shape=(self._state_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='uz'
         )
         self._ur = tf.Variable(
             self._u_init.build(
                 shape=(self._state_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='ur'
         )
         self._uh = tf.Variable(
             self._u_init.build(
                 shape=(self._state_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='uh'
         )
         if self._with_bias:
@@ -1201,21 +1202,21 @@ class GRUCell(Widget):
                 self._b_init.build(
                     shape=(self._state_size,)
                 ),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='bz'
             )
             self._br = tf.Variable(
                 self._b_init.build(
                     shape=(self._state_size,)
                 ),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='br'
             )
             self._bh = tf.Variable(
                 self._b_init.build(
                     shape=(self._state_size,)
                 ),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='bh'
             )
 
@@ -1304,7 +1305,7 @@ class GRUCell(Widget):
             batch_size = tf.shape(seq)[1]
             init_state = tf.zeros(
                 shape=(batch_size, self.state_size),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='init_state'
             )
 
@@ -1353,14 +1354,14 @@ class GRUCell(Widget):
             batch_size = tf.shape(init_input)[0]
             init_state = tf.zeros(
                 shape=(batch_size, self.state_size),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='init_state'
             )
         if init_input is None:
             batch_size = tf.shape(init_state)[0]
             init_input = tf.zeros(
                 shape=(batch_size, self._input_size),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='init_input'
             )
 
@@ -1440,28 +1441,28 @@ class LSTMCell(Widget):
             self._w_init.build(
                 shape=(self._input_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='wi'
         )
         self._wf = tf.Variable(
             self._w_init.build(
                 shape=(self._input_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='wf'
         )
         self._wo = tf.Variable(
             self._w_init.build(
                 shape=(self._input_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='wo'
         )
         self._wc = tf.Variable(
             self._w_init.build(
                 shape=(self._input_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='wc'
         )
         #
@@ -1469,28 +1470,28 @@ class LSTMCell(Widget):
             self._u_init.build(
                 shape=(self._state_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='ui'
         )
         self._uf = tf.Variable(
             self._u_init.build(
                 shape=(self._state_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='uf'
         )
         self._uo = tf.Variable(
             self._u_init.build(
                 shape=(self._state_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='uo'
         )
         self._uc = tf.Variable(
             self._u_init.build(
                 shape=(self._state_size, self._state_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='uc'
         )
         #
@@ -1499,28 +1500,28 @@ class LSTMCell(Widget):
                 self._b_init.build(
                     shape=(self._state_size,)
                 ),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='bi'
             )
             self._bf = tf.Variable(
                 self._b_init.build(
                     shape=(self._state_size,)
                 ),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='bf'
             )
             self._bo = tf.Variable(
                 self._b_init.build(
                     shape=(self._state_size,)
                 ),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='bo'
             )
             self._bc = tf.Variable(
                 self._b_init.build(
                     shape=(self._state_size,)
                 ),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='bc'
             )
 
@@ -1651,14 +1652,14 @@ class LSTMCell(Widget):
             batch_size = tf.shape(seq)[1]
             init_cell_state = tf.zeros(
                 shape=(batch_size, self.state_size),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='init_cell_state'
             )
         if init_state is None:
             batch_size = tf.shape(seq)[1]
             init_state = tf.zeros(
                 shape=(batch_size, self.state_size),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='init_state'
             )
         _, states = tf.scan(
@@ -1703,19 +1704,19 @@ class LSTMCell(Widget):
         if init_cell_state is None:
             init_cell_state = tf.zeros(
                 shape=(batch_size, self.state_size),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='init_cell_state'
             )
         if init_state is None:
             init_state = tf.zeros(
                 shape=(batch_size, self.state_size),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='init_state'
             )
         if init_input is None:
             init_input = tf.zeros(
                 shape=(batch_size, self._input_size),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 name='init_input'
             )
 
@@ -1770,21 +1771,21 @@ class BatchNorm(Widget):
     def _build(self):
         beta_init = tf.zeros(
             shape=self._size,
-            dtype=settings.D_TYPE
+            dtype=conf.dtype
         )
         gamma_init = tf.ones(
             shape=self._size,
-            dtype=settings.D_TYPE
+            dtype=conf.dtype
         )
         self._beta = tf.Variable(
             name='beta',
             initial_value=beta_init,
-            dtype=settings.D_TYPE
+            dtype=conf.dtype
         )
         self._gamma = tf.Variable(
             name='gamma',
             initial_value=gamma_init,
-            dtype=settings.D_TYPE
+            dtype=conf.dtype
         )
 
     def _setup(self, x):
@@ -1859,21 +1860,21 @@ class SoftAttention(Widget):
             self._seq_weight_initializer.build(
                 shape=(self._seq_elem_size, self._common_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='w'
         )
         self._u = tf.Variable(
             self._context_weight_initializer.build(
                 shape=(self._vec_size, self._common_size)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='u'
         )
         self._omega = tf.Variable(
             self._omega_initializer.build(
                 shape=(self._common_size, 1)
             ),
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             name='omega'
         )
 
@@ -1925,7 +1926,7 @@ class SoftAttention(Widget):
         if seq_length is None:
             a = tf.nn.softmax(a, dim=0)
         else:
-            m = tf.sequence_mask(seq_length, dtype=settings.D_TYPE)  # (batch_size, seq_length)
+            m = tf.sequence_mask(seq_length, dtype=conf.dtype)  # (batch_size, seq_length)
             m_shape = tf.shape(m)
             m = tf.reshape(tf.transpose(m), (m_shape[1], m_shape[0], 1))
             s = tf.exp(a)

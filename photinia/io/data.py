@@ -39,15 +39,17 @@ class MemorySource(DataSource):
                  columns,
                  column_names,
                  dtype=None):
-        """Construct a dataset.
+        """Data source from memory.
 
-        :param columns: Tuple of list, np.array or any iterable objects.
-        :param dtype: Data type.
+        Args:
+            columns: Tuple of list, np.array or any iterable objects.
+            column_names (tuple|list): Column names.
+            dtype: Data type.
         """
         self._num_comp = len(columns)
         if self._num_comp == 0:
             raise ValueError('At least 1 data object should be given.')
-        self._meta = tuple(column_name for column_name in column_names)
+        self._meta = tuple(str(column_name) for column_name in column_names)
         self._columns = [np.array(column, dtype=dtype) for column in columns]
         size = None
         for column in self._columns:

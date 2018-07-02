@@ -8,7 +8,7 @@
 import numpy as np
 import tensorflow as tf
 
-from . import settings
+from . import conf
 
 
 class Initializer(object):
@@ -34,7 +34,7 @@ class Zeros(Initializer):
     """
 
     def _build(self, shape, name, seed):
-        return tf.zeros(shape, dtype=settings.D_TYPE, name=name)
+        return tf.zeros(shape, dtype=conf.dtype, name=name)
 
 
 class Ones(Initializer):
@@ -42,7 +42,7 @@ class Ones(Initializer):
     """
 
     def _build(self, shape, name, seed):
-        return tf.ones(shape, dtype=settings.D_TYPE, name=name)
+        return tf.ones(shape, dtype=conf.dtype, name=name)
 
 
 class Constant(Initializer):
@@ -59,7 +59,7 @@ class Constant(Initializer):
         return self._value
 
     def _build(self, shape, name, seed):
-        return tf.constant(self._value, dtype=settings.D_TYPE, shape=shape, name=name)
+        return tf.constant(self._value, dtype=conf.dtype, shape=shape, name=name)
 
 
 class RandomNormal(Initializer):
@@ -91,7 +91,7 @@ class RandomNormal(Initializer):
             shape=shape,
             mean=self._mean,
             stddev=self._stddev,
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             seed=seed,
             name=name
         )
@@ -126,7 +126,7 @@ class RandomUniform(Initializer):
             shape=shape,
             minval=self._minval,
             maxval=self._maxval,
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             seed=seed,
             name=name
         )
@@ -165,7 +165,7 @@ class TruncatedNormal(Initializer):
             shape=shape,
             mean=self._mean,
             stddev=self._stddev,
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             seed=seed,
             name=name
         )
@@ -204,7 +204,7 @@ class Orthogonal(Initializer):
         q = q.reshape(shape)
         return tf.constant(
             value=self._gain * q[:shape[0], :shape[1]],
-            dtype=settings.D_TYPE,
+            dtype=conf.dtype,
             shape=shape,
             name=name
         )
@@ -232,7 +232,7 @@ class Identity(Initializer):
         else:
             return tf.constant(
                 value=self._gain * np.identity(shape[0]),
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 shape=shape,
                 name=name
             )
@@ -305,7 +305,7 @@ class VarianceScaling(Initializer):
                 shape=shape,
                 mean=0.,
                 stddev=stddev,
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 seed=seed,
                 name=name
             )
@@ -315,7 +315,7 @@ class VarianceScaling(Initializer):
                 shape=shape,
                 minval=-limit,
                 maxval=limit,
-                dtype=settings.D_TYPE,
+                dtype=conf.dtype,
                 seed=seed,
                 name=name
             )

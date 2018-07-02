@@ -42,17 +42,17 @@ class SeqCoAttention(ph.Widget):
         """
         # stage 1:
         w_init_value = tf.random_normal(
-            dtype=ph.D_TYPE,
+            dtype=ph.dtype,
             shape=(self._vec_size, self._state_size),
             stddev=1.0 / (self._vec_size + self._state_size)
         )
         v_init_value = tf.random_normal(
-            dtype=ph.D_TYPE,
+            dtype=ph.dtype,
             shape=(self._img_size, self._state_size),
             stddev=1.0 / (self._img_size + self._state_size)
         )
         u_init_value = tf.random_normal(
-            dtype=ph.D_TYPE,
+            dtype=ph.dtype,
             shape=(self._state_size, 1),
             stddev=1.0 / (self._state_size + 1)
         )
@@ -60,39 +60,39 @@ class SeqCoAttention(ph.Widget):
         # stage 1:
         # input: img
         # output: attentioned img
-        self._wx1 = tf.Variable(name='wx1', dtype=ph.D_TYPE, initial_value=v_init_value)
-        self._ww1 = tf.Variable(name='ww1', dtype=ph.D_TYPE, initial_value=u_init_value)
+        self._wx1 = tf.Variable(name='wx1', dtype=ph.dtype, initial_value=v_init_value)
+        self._ww1 = tf.Variable(name='ww1', dtype=ph.dtype, initial_value=u_init_value)
 
         # stage 2:
         # input: attentioned img, seqA
         # output: attentioned seqA
-        self._wx2 = tf.Variable(name='wx2', dtype=ph.D_TYPE, initial_value=w_init_value)
-        self._wg21 = tf.Variable(name='wg21', dtype=ph.D_TYPE, initial_value=v_init_value)
-        self._ww2 = tf.Variable(name='ww2', dtype=ph.D_TYPE, initial_value=u_init_value)
+        self._wx2 = tf.Variable(name='wx2', dtype=ph.dtype, initial_value=w_init_value)
+        self._wg21 = tf.Variable(name='wg21', dtype=ph.dtype, initial_value=v_init_value)
+        self._ww2 = tf.Variable(name='ww2', dtype=ph.dtype, initial_value=u_init_value)
 
         # stage 3:
         # input: attentioned seq A, attentioned image
         # output: attentioned seq B
-        self._wx3 = tf.Variable(name='wx3', dtype=ph.D_TYPE, initial_value=w_init_value)
-        self._wg31 = tf.Variable(name='wg31', dtype=ph.D_TYPE, initial_value=w_init_value)
-        self._wg32 = tf.Variable(name='wg32', dtype=ph.D_TYPE, initial_value=v_init_value)
-        self._ww3 = tf.Variable(name='ww3', dtype=ph.D_TYPE, initial_value=u_init_value)
+        self._wx3 = tf.Variable(name='wx3', dtype=ph.dtype, initial_value=w_init_value)
+        self._wg31 = tf.Variable(name='wg31', dtype=ph.dtype, initial_value=w_init_value)
+        self._wg32 = tf.Variable(name='wg32', dtype=ph.dtype, initial_value=v_init_value)
+        self._ww3 = tf.Variable(name='ww3', dtype=ph.dtype, initial_value=u_init_value)
 
         # stage 4:
         # input: attentioned seq B, attentioned seq A
         # output: attentioned img
-        self._wx4 = tf.Variable(name='wx4', dtype=ph.D_TYPE, initial_value=v_init_value)
-        self._wg41 = tf.Variable(name='wg41', dtype=ph.D_TYPE, initial_value=w_init_value)
-        self._wg42 = tf.Variable(name='wg42', dtype=ph.D_TYPE, initial_value=w_init_value)
-        self._ww4 = tf.Variable(name='ww4', dtype=ph.D_TYPE, initial_value=u_init_value)
+        self._wx4 = tf.Variable(name='wx4', dtype=ph.dtype, initial_value=v_init_value)
+        self._wg41 = tf.Variable(name='wg41', dtype=ph.dtype, initial_value=w_init_value)
+        self._wg42 = tf.Variable(name='wg42', dtype=ph.dtype, initial_value=w_init_value)
+        self._ww4 = tf.Variable(name='ww4', dtype=ph.dtype, initial_value=u_init_value)
 
         # stage 5:
         # input: attentioned seq B, attentioned img
         # output: attentioned seqA
-        self._wx5 = tf.Variable(name='wx5', dtype=ph.D_TYPE, initial_value=w_init_value)
-        self._wg51 = tf.Variable(name='wg51', dtype=ph.D_TYPE, initial_value=w_init_value)
-        self._wg52 = tf.Variable(name='wg52', dtype=ph.D_TYPE, initial_value=v_init_value)
-        self._ww5 = tf.Variable(name='ww5', dtype=ph.D_TYPE, initial_value=u_init_value)
+        self._wx5 = tf.Variable(name='wx5', dtype=ph.dtype, initial_value=w_init_value)
+        self._wg51 = tf.Variable(name='wg51', dtype=ph.dtype, initial_value=w_init_value)
+        self._wg52 = tf.Variable(name='wg52', dtype=ph.dtype, initial_value=v_init_value)
+        self._ww5 = tf.Variable(name='ww5', dtype=ph.dtype, initial_value=u_init_value)
 
     def _setup(self, seqa, img, seqb):
         """

@@ -7,7 +7,7 @@
 
 import tensorflow as tf
 
-from . import settings
+from . import conf
 
 
 def log(x, eps=1e-7, name=None):
@@ -62,7 +62,7 @@ def swish(x, name=None):
 def random_gumbel(shape,
                   mu=0.0,
                   beta=1.0,
-                  dtype=settings.D_TYPE,
+                  dtype=conf.dtype,
                   seed=None,
                   name=None):
     """Outputs random values from a Gumbel distribution.

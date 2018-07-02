@@ -49,7 +49,7 @@ class Model(photinia.Model):
         # 输入定义
         seq = tf.placeholder(
             shape=(None, None, self._voc_size),
-            dtype=photinia.D_TYPE
+            dtype=photinia.dtype
         )
         seq_0 = seq[:, :-1, :]
         seq_1 = seq[:, 1:, :]
@@ -57,7 +57,7 @@ class Model(photinia.Model):
         # RNN结构
         init_state = tf.zeros(
             shape=(batch_size, self._state_size),
-            dtype=photinia.D_TYPE
+            dtype=photinia.dtype
         )
         states = tf.scan(
             fn=self._rnn_step,
@@ -91,7 +91,7 @@ class Model(photinia.Model):
         #
         word = tf.placeholder(
             shape=(None, self._voc_size),
-            dtype=photinia.D_TYPE
+            dtype=photinia.dtype
         )
         emb = self._emb.setup(word)
         emb = photinia.lrelu(emb)

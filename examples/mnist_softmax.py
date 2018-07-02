@@ -41,15 +41,15 @@ class Model(photinia.Model):
         # 网络模块定义：线性层 --- build
         self._lin = photinia.Linear('LINEAR', self._input_size, self._num_classes)
         # 输入定义
-        x = tf.placeholder(dtype=photinia.D_TYPE, shape=[None, self._input_size])
-        y_ = tf.placeholder(dtype=photinia.D_TYPE, shape=[None, self._num_classes])
+        x = tf.placeholder(dtype=photinia.dtype, shape=[None, self._input_size])
+        y_ = tf.placeholder(dtype=photinia.dtype, shape=[None, self._num_classes])
         # 网络结构定义 --- setup
         y = self._lin.setup(x)
         # 损失函数定义， softmax交叉熵函数
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y_, logits=y))
         # accuracy计算
         correct_prediction = tf.equal(tf.argmax(y, 1), tf.argmax(y_, 1))
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, photinia.D_TYPE))
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, photinia.dtype))
         # 设置训练和预测的slot
         self._add_slot(
             'train',

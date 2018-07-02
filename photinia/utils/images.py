@@ -11,8 +11,6 @@ import numpy as np
 import scipy.ndimage as ndi
 from PIL import Image
 
-import photinia as ph
-
 
 def load_as_array(fn_or_fp, height, width):
     """Load an image from file and convert it into array.

@@ -2,21 +2,10 @@
 
 """
 @author: xi
-@since: 2017-12-12
+@since: 2018-07-01
 """
 
 import tensorflow as tf
-
-D_TYPE = tf.float32
-
-
-# TRAIN = 'train'
-# VALIDATE = 'validate'
-# PREDICT = 'predict'
-#
-# CONTEXT_TRAINER = 'trainer'
-# CONTEXT_LOOP = 'loop'
-# CONTEXT_MAX_LOOP = 'max_loop'
 
 
 class __GlobalContext(object):
