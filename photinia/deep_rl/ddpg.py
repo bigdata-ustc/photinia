@@ -5,9 +5,6 @@
 @since: 2018-06-09
 """
 
-import argparse
-
-import numpy as np
 import tensorflow as tf
 
 import photinia as ph
@@ -281,45 +278,3 @@ class Agent(ph.Model):
         self._update_a_source(s)
         self._update_q_target()
         self._update_a_target()
-
-
-def main(args):
-    import gym
-    model = Agent('agent', 3, 1)
-    ph.initialize_global_variables()
-    model.init()
-
-    render = False
-    var = 3.0
-    env = gym.make('Pendulum-v0')
-    for i in range(150):
-        total_r = 0
-        s = env.reset()
-        for t in range(1000):
-            if render:
-                env.render()
-
-            a = model.predict(s) * env.action_space.high
-            a = np.clip(np.random.normal(a, var), -2, 2)
-
-            s_, r, done, info = env.step(a)
-
-            model.feedback(s, a, r, s_)
-            model.train()
-
-            total_r += r
-            var *= .9995
-            s = s_
-            if done:
-                print('[%d] %f' % (i, total_r))
-                if total_r > -300:
-                    render = True
-                break
-    return 0
-
-
-if __name__ == '__main__':
-    _parser = argparse.ArgumentParser()
-    #
-    _args = _parser.parse_args()
-    exit(main(_args))
