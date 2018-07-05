@@ -7,6 +7,8 @@
 
 import random
 
+import numpy as np
+
 
 class ReplayMemory(object):
 
@@ -61,3 +63,21 @@ class ReplayMemory(object):
             for i in range(5):
                 columns[i].append(row[i])
         return columns
+
+
+class NormalNoise(object):
+
+    def __init__(self, init_stddev, low_bound=-1, high_bound=1):
+        self._stddev = init_stddev
+        self._low_bound = low_bound
+        self._high_bound = high_bound
+
+    def add_noise(self, center):
+        return np.clip(
+            np.random.normal(center, self._stddev),
+            self._low_bound,
+            self._high_bound
+        )
+
+    def discount(self, factor=0.999):
+        self._stddev *= factor

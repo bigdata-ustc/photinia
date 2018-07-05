@@ -9,9 +9,9 @@ import argparse
 import os
 
 import gym
-import numpy as np
 
 import photinia as ph
+from photinia import deep_rl
 from photinia.deep_rl import ddpg
 
 
@@ -21,8 +21,8 @@ def main(args):
     model.init()
 
     render = False
-    var = 3.0
     env = gym.make('Pendulum-v0')
+    env_noise = deep_rl.NormalNoise(1.0, -env.action_space.high, env.action_space.high)
     for i in range(args.num_loops):
         total_r = 0
         s = env.reset()
@@ -31,7 +31,8 @@ def main(args):
                 env.render()
 
             a = model.predict(s) * env.action_space.high
-            a = np.clip(np.random.normal(a, var), -2, 2)
+            a = env_noise.add_noise(a)
+            env_noise.discount()
 
             s_, r, done, info = env.step(a)
 
@@ -39,7 +40,6 @@ def main(args):
             model.train(args.batch_size)
 
             total_r += r
-            var *= .9995
             s = s_
             if done:
                 print('[%d] %f' % (i, total_r))
