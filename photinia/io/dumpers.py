@@ -30,22 +30,6 @@ class ModelDumper(object):
     def _dump(self, param_dict, name):
         raise NotImplementedError
 
-    # def load(self, name, model, alias_list=None):
-    #     param_dict = self._load(name)
-    #     if alias_list:
-    #         new_dict = {}
-    #         for key, value in param_dict.items():
-    #             for src, dst in alias_list:
-    #                 if not key.startswith(src):
-    #                     continue
-    #                 print(key)
-    #                 if isinstance(dst, widgets.Widget):
-    #                     dst = dst.prefix()
-    #                 key, _ = re.subn('^{}'.format(src), dst, key)
-    #                 new_dict[key] = value
-    #         param_dict = new_dict
-    #     model.parameters = param_dict
-
     def load(self, widget, name, path=None, strict=True):
         """Load a model (or part of the model) parameters into the given widget.
 
@@ -102,30 +86,23 @@ class FileDumper(ModelDumper):
     """File Dumper
     """
 
-    def __init__(self,
-                 output_dir):
-        if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
-        self._output_dir = output_dir
+    _INSTANCE = None
+
+    @staticmethod
+    def get_instance():
+        if FileDumper._INSTANCE is None:
+            FileDumper._INSTANCE = FileDumper()
+        return FileDumper._INSTANCE
+
+    def __init__(self):
         super(FileDumper, self).__init__()
 
-    @property
-    def output_dir(self):
-        return self._output_dir
-
-    def clear(self):
-        if os.path.exists(self._output_dir):
-            shutil.rmtree(self._output_dir)
-            os.mkdir(self._output_dir)
-
-    def _dump(self, param_dict, name):
-        model_file = os.path.join(self._output_dir, name)
+    def _dump(self, param_dict, model_file):
         with open(model_file, 'wb') as f:
             pickle.dump(param_dict, f)
 
-    def _load(self, name):
-        param_file = os.path.join(self._output_dir, name)
-        with open(param_file, 'rb') as f:
+    def _load(self, model_file):
+        with open(model_file, 'rb') as f:
             return pickle.load(f)
 
 
@@ -148,23 +125,23 @@ class TreeDumper(ModelDumper):
             TreeDumper._INSTANCE = TreeDumper()
         return TreeDumper._INSTANCE
 
-    @staticmethod
-    def default_dump(widget, name):
-        TreeDumper.get_instance().dump(widget, name)
-
-    @staticmethod
-    def default_load(widget, name, path=None, strict=True):
-        TreeDumper.get_instance().load(widget, name, path, strict)
-
     def __init__(self, output_dir=None):
         super(TreeDumper, self).__init__()
         self._output_dir = output_dir
 
     def _dump(self, param_dict, name):
-        model_dir = name if self._output_dir is None else os.path.join(self._output_dir, name)
+        #
+        # prepare model dir
+        if self._output_dir is None:
+            model_dir = name
+        else:
+            model_dir = os.path.join(self._output_dir, name)
         if os.path.exists(model_dir):
             shutil.rmtree(model_dir)
         os.mkdir(model_dir)
+
+        #
+        #  start to dump
         for path, value in param_dict.items():
             param_dir, _ = os.path.split(path)
             param_dir = os.path.join(model_dir, param_dir)
@@ -187,9 +164,17 @@ class TreeDumper(ModelDumper):
         return ''.join(path)
 
     def _load(self, name):
-        model_dir = name if self._output_dir is None else os.path.join(self._output_dir, name)
+        #
+        # prepare model dir
+        if self._output_dir is None:
+            model_dir = name
+        else:
+            model_dir = os.path.join(self._output_dir, name)
         if not os.path.exists(model_dir):
             raise FileNotFoundError()
+
+        #
+        # load
         param_dict = {}
         for path in os.listdir(model_dir):
             TreeDumper._load_tree(model_dir, path, param_dict)
@@ -257,3 +242,29 @@ class MongoDumper(ModelDumper):
             with f:
                 param_dict = pickle.load(f)
         return param_dict
+
+
+def dump_model_as_file(widget, model_file):
+    FileDumper.get_instance().dump(widget, model_file)
+
+
+def load_model_from_file(widget,
+                         model_file,
+                         path=None,
+                         strict=True):
+    """Load parameters into a model (or a part of the model) using FileDumper.
+    """
+    FileDumper.get_instance().load(widget, model_file, path, strict)
+
+
+def dump_model_as_tree(widget, name):
+    TreeDumper.get_instance().dump(widget, name)
+
+
+def load_model_from_tree(widget,
+                         name,
+                         path=None,
+                         strict=True):
+    """Load parameters into a model (or a part of the model) using TreeDumper.
+    """
+    TreeDumper.get_instance().load(widget, name, path, strict)

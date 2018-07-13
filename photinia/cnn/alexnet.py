@@ -5,7 +5,6 @@
 @since: 2018-03-03
 """
 
-import numpy as np
 import tensorflow as tf
 
 import photinia as ph
@@ -92,7 +91,6 @@ class AlexNet(ph.Widget):
             input_size=self._fc7.output_size, output_size=1000,
             w_init=ph.init.RandomNormal(stddev=1e-4)
         )
-        print(self._fc8.output_size)
 
     def _setup(self, x):
         h = ph.setup(
@@ -108,35 +106,6 @@ class AlexNet(ph.Widget):
         )
         y = self._fc8.setup(h)
         y = tf.nn.softmax(y)
-        # conv1 = self._conv1.setup(x)
-        # conv1 = tf.nn.relu(conv1)
-        # norm1 = self._lrn(conv1, radius=2, alpha=1e-5, beta=0.75, name='norm1')
-        # pool1 = self._pool1.setup(norm1)
-        # #
-        # conv2 = self._conv2.setup(pool1)
-        # conv2 = tf.nn.relu(conv2)
-        # norm2 = self._lrn(conv2, radius=2, alpha=1e-5, beta=0.75, name='norm2')
-        # pool2 = self._pool2.setup(norm2)
-        # #
-        # conv3 = self._conv3.setup(pool2)
-        # conv3 = tf.nn.relu(conv3)
-        # conv4 = self._conv4.setup(conv3)
-        # conv4 = tf.nn.relu(conv4)
-        # conv5 = self._conv5.setup(conv4)
-        # conv5 = tf.nn.relu(conv5)
-        # pool5 = self._pool5.setup(conv5)
-        # #
-        # flattened = ph.flatten(pool5)
-        # fc6 = self._fc6.setup(flattened)
-        # fc6 = tf.nn.relu(fc6)
-        # # dropout6 = tf.nn.dropout(fc6, self._keep_prob)
-        # #
-        # fc7 = self._fc7.setup(fc6)
-        # fc7 = tf.nn.relu(fc7)
-        # # dropout7 = tf.nn.dropout(fc7, self._keep_prob)
-        # #
-        # fc8 = self._fc8.setup(fc7)
-        # y = tf.nn.softmax(fc8)
         return y, h
 
     @staticmethod
@@ -149,30 +118,5 @@ class AlexNet(ph.Widget):
             bias=1.0
         )
 
-    def load(self, param_file):
-        pass
-
-
-def load_parameters(parameter_path):
-    # pre_trained parameters: http://www.cs.toronto.edu/~guerzhoy/tf_alexnet/bvlc_alexnet.npy
-    prepath = 'AlexNet/emb'
-    param_dict = {}
-    weights_dict = np.load(parameter_path, encoding='bytes').item()
-
-    for op_name in weights_dict:
-        for param in weights_dict[op_name]:
-            if len(param.shape) == 1:
-                param_dict[prepath + '/' + op_name + '/b:0'] = param
-            else:
-                param_dict[prepath + '/' + op_name + '/w:0'] = param
-
-    return param_dict
-
-
-if __name__ == '__main__':
-    AlexNet()
-    exit()
-    d = np.load('/home/xi/Downloads/bvlc_alexnet.npy', encoding='bytes').item()
-    for key, value in d.items():
-        print(key, value[0].shape, value[1].shape)
-    exit()
+    def load_pretrain(self, model_file='alexnet.pickle'):
+        ph.io.load_model_from_file(self, model_file)
