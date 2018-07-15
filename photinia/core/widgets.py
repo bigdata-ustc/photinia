@@ -225,10 +225,11 @@ class Trainable(object):
         var_dict = {var.name: var for var in var_list}
         session = context.get_session()
         for name, value in param_dict.items():
-            if name not in var_dict:
+            name_replace = name.replace('\\', '/')
+            if name_replace not in var_dict:
                 if strict:
                     raise ValueError('%s is not in this model.' % name)
-            var = var_dict[name]
+            var = var_dict[name_replace]
             var.load(value, session=session)
 
     def get_operation(self, name):
