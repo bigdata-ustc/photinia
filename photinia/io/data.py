@@ -8,7 +8,9 @@
 import collections
 import csv
 import queue
+import random
 import threading
+import time
 
 import numpy as np
 
@@ -161,6 +163,124 @@ class CSVSource(DataSource):
             )
         # print('DEBUG: Fetch from memory.')
         return self._memory_source.next()
+
+
+class MongoSource(DataSource):
+
+    def __init__(self,
+                 coll,
+                 random_order,
+                 column_names,
+                 filters=None,
+                 buffer_size=100000):
+        """Data source used to access MongoDB.
+
+        Args:
+            coll: MongoDB collection object.
+            random_order (bool): If iterate the collections in random order.
+                This is usually set to True when used as train set.
+            column_names (list[str]|tuple[str]): Column names that will query from the database.
+            filters (dict): Filters which will be pass to MongoDB's find() operation.
+            buffer_size (int): Max size of the candidate buffer.
+                This option will only take effect when random_order is True.
+
+        """
+        super(MongoSource, self).__init__()
+        self._coll = coll
+        self._random_order = random_order
+        self._meta = tuple(column_name for column_name in column_names)
+        self._projections = {column_name: 1 for column_name in column_names}
+        self._filters = filters if filters is not None else {}
+        self._buffer_size = buffer_size
+
+        self._cursor = None
+        self._buffer = list()
+
+    def meta(self):
+        return self._meta
+
+    def next(self):
+        if self._random_order:
+            return self._random_next()
+        else:
+            return self._normal_order()
+
+    def _random_next(self):
+        _id = None
+        error = None
+        for _ in range(3):
+            try:
+                _id = self._next_id()
+                break
+            except StopIteration:
+                return None
+            except Exception as e:
+                error = e
+                time.sleep(3)
+                continue
+        if _id is None:
+            raise error
+
+        if len(self._buffer) < self._buffer_size:
+            self._buffer.append(_id)
+        else:
+            index = random.randint(0, self._buffer_size - 1)
+            self._buffer[index] = _id
+        index = random.randint(0, len(self._buffer) - 1)
+        _id = self._buffer[index]
+
+        doc = None
+        error = None
+        for _ in range(3):
+            try:
+                doc = self._coll.find_one({'_id': _id}, self._projections)
+                break
+            except Exception as e:
+                error = e
+                time.sleep(3)
+                continue
+        if doc is None:
+            raise error
+
+        return doc
+
+    def _next_id(self):
+        if self._cursor is None:
+            self._cursor = self._coll.find(self._filters, {'_id': 1})
+        try:
+            doc = next(self._cursor)
+        except StopIteration as e:
+            self._cursor = None
+            raise e
+        except Exception as e:
+            self._cursor = None
+            raise e
+        return doc['_id']
+
+    def _normal_order(self):
+        doc = None
+        error = None
+        for _ in range(3):
+            try:
+                if self._cursor is None:
+                    self._cursor = self._coll.find(self._filters, self._projections)
+                try:
+                    doc = next(self._cursor)
+                except StopIteration:
+                    self._cursor = None
+                    return None
+                except Exception as e:
+                    self._cursor = None
+                    raise e
+                break
+            except Exception as e:
+                error = e
+                time.sleep(3)
+                continue
+        if doc is None:
+            raise error
+
+        return doc
 
 
 class BatchSource(DataSource):
