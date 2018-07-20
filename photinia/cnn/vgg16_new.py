@@ -168,6 +168,19 @@ class Vgg16(ph.Widget):
             w_init=ph.init.RandomNormal(stddev=1e-4)
         )
 
+    @property
+    def fc6(self):
+        return self._fc6
+
+    @property
+    def fc7(self):
+        return self._fc7
+
+    @property
+    def fc8(self):
+        return self._fc8
+
+
     def _setup(self, x):
         # Convert RGB to BGR
         red, green, blue = tf.split(axis=3, num_or_size_splits=3, value=x)
@@ -209,10 +222,13 @@ class Vgg16(ph.Widget):
     def load_pretrain(self, model_file='vgg16'):
         ph.io.load_model_from_tree(self, model_file)
 
-    def load_parameters(self, model_file='vgg16.npy'):
+    def load_parameters(self, prepath=None, model_file='vgg16.npy'):
         self.data_dict = np.load(model_file, encoding='latin1').item()
         param_dict = {}
-        prepath = 'vgg16'
+        if prepath is None:
+            prepath = 'vgg16'
+        else:
+            prepath = prepath + '/vgg16'
 
         for op_name in self.data_dict:
             for param in self.data_dict[op_name]:
