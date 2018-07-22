@@ -4,7 +4,7 @@
 @author: xi
 @since: 2017-12-25
 """
-
+import io
 import random
 
 import numpy as np
@@ -12,17 +12,27 @@ import scipy.ndimage as ndi
 from PIL import Image
 
 
-def load_as_array(fn_or_fp, height, width):
+def load_as_array(file_or_bytes):
     """Load an image from file and convert it into array.
     The data type of the array is np.uint8.
 
-    :param fn_or_fp: File name or file object.
-    :param height: Height.
-    :param width: Width.
-    :return: An array represents the image.
+    Args:
+        file_or_bytes: File name, file object or bytes.
+
+    Returns:
+        numpy.ndarray: np.uint8 ndarray represent the image.
+            The array has shape (height, width, channels).
+            If the image is colored, the order of the channels is:
+                [:, :, 0] -> B
+                [:, :, 1] -> G
+                [:, :, 2] -> R
+
     """
-    image = Image.open(fn_or_fp)
-    image = image.resize((width, height), Image.LANCZOS)
+    if isinstance(file_or_bytes, bytes):
+        with io.BytesIO(file_or_bytes) as f:
+            image = Image.open(f)
+    else:
+        image = Image.open(file_or_bytes)
     return np.asarray(image, dtype=np.uint8)
 
 
@@ -38,20 +48,14 @@ def save_array(fn_or_fp, array):
     image.save(fn_or_fp)
 
 
-def array_to_mat(array, height=None, width=None):
+def array_to_mat(array):
     """Convert an image array into a matrix.
     The data type of the matrix is np.float32.
     Elements in the matrix are valued in range -1 ~ 1.
 
     :param array: The array.
-    :param height: Height.
-    :param width: Width.
     :return: The matrix.
     """
-    if height is not None and width is not None:
-        image = Image.fromarray(array)
-        image = image.resize((width, height), Image.LANCZOS)
-        return (np.asarray(image, dtype=np.float32) - 128.0) / 130.0
     return (array.astype(np.float32) - 128.0) / 130.0
 
 
@@ -66,18 +70,28 @@ def mat_to_array(mat):
     return (mat * 128.0 + 127.75).astype(np.uint8)
 
 
-def load_as_mat(fn_or_fp, height, width):
+def load_as_mat(file_or_bytes):
     """Load an image from file and convert it into matrix.
     The data type of the array is np.float32.
     Elements in the matrix must be valued in range -1 ~ 1.
 
-    :param fn_or_fp: File name or file object.
-    :param height: Height.
-    :param width: Width.
-    :return: An matrix represents the image.
+    Args:
+        file_or_bytes: File name, file object or bytes.
+
+    Returns:
+        numpy.ndarray: np.float32 ndarray represent the image.
+            The array has shape (height, width, channels).
+            If the image is colored, the order of the channels is:
+                [:, :, 0] -> B
+                [:, :, 1] -> G
+                [:, :, 2] -> R
+
     """
-    image = Image.open(fn_or_fp)
-    image = image.resize((width, height))
+    if isinstance(file_or_bytes, bytes):
+        with io.BytesIO(file_or_bytes) as f:
+            image = Image.open(f)
+    else:
+        image = Image.open(file_or_bytes)
     return (np.asarray(image, dtype=np.float32) - 128.0) / 128.0
 
 
