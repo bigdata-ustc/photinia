@@ -201,9 +201,13 @@ class MongoSource(DataSource):
 
     def next(self):
         if self._random_order:
-            return self._random_next()
+            doc = self._random_next()
         else:
-            return self._normal_order()
+            doc = self._normal_order()
+        return tuple(
+            doc[column_name]
+            for column_name in self._meta
+        ) if doc is not None else None
 
     def _random_next(self):
         _id = None
