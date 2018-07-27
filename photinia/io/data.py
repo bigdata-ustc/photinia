@@ -169,18 +169,18 @@ class MongoSource(DataSource):
 
     def __init__(self,
                  coll,
-                 random_order,
                  column_names,
-                 filters=None,
+                 filters,
+                 random_order,
                  buffer_size=100000):
         """Data source used to access MongoDB.
 
         Args:
             coll: MongoDB collection object.
-            random_order (bool): If iterate the collections in random order.
-                This is usually set to True when used as train set.
             column_names (list[str]|tuple[str]): Column names that will query from the database.
             filters (dict): Filters which will be pass to MongoDB's find() operation.
+            random_order (bool): If iterate the collections in random order.
+                This is usually set to True when used as train set.
             buffer_size (int): Max size of the candidate buffer.
                 This option will only take effect when random_order is True.
 
