@@ -14,21 +14,53 @@ import photinia as ph
 
 class Vocabulary(object):
 
-    def __init__(self, coll, word_field='word', index_field='index'):
-        self._coll = coll
-        self._word_field = word_field
-        self._index_field = index_field
-        #
-        voc_size = coll.count()
-        self._voc_size = voc_size
+    def __init__(self):
+        self._word_dict = dict()
+        self._index_dict = dict()
+        self._voc_size = 0
+
+    def load(self, data_source, word_field='word', index_field='index'):
+        """Load an existing vocabulary.
+
+        Args:
+            data_source (photinia.io.DataSource): Input data source.
+            word_field (str): Column name that contains the word.
+            index_field (str): Column name that contains the word index.
+
+        """
+        meta = data_source.meta()
+        word_index = meta.index(word_field)
+        index_index = meta.index(index_field)
         self._word_dict = {
-            doc[word_field]: doc[index_field]
-            for doc in coll.find()
+            row[word_index]: row[index_index]
+            for row in data_source
         }
         self._index_dict = {
             index: word
-            for word, index in self._voc_size
+            for word, index in self._word_dict.items()
         }
+        self._voc_size = len(self._word_dict)
+
+    def generate(self, data_source, words_field):
+        """Generate a vocabulary from sentences.
+
+        Args:
+            data_source (photinia.io.DataSource): Input data source.
+            words_field (str): Column name that contains "words" data.
+
+        """
+        meta = data_source.meta()
+        words_index = meta.index(words_field)
+        for row in data_source:
+            words = row[words_index]
+            for word in words:
+                if word not in self._word_dict:
+                    self._word_dict[word] = len(self._word_dict)
+        self._index_dict = {
+            index: word
+            for word, index in self._word_dict.items()
+        }
+        self._voc_size = len(self._word_dict)
 
     @property
     def voc_size(self):
@@ -48,6 +80,12 @@ class Vocabulary(object):
             for word in words
         ]
         return one_hot_list
+
+    def one_hots_to_words(self, one_hots):
+        return ''.join((
+            self._index_dict[np.argmax(one_hot)]
+            for one_hot in one_hots
+        ))
 
 
 class WordEmbedding(object):
