@@ -4,20 +4,21 @@
 @author: xi
 @since: 2017-12-25
 """
-import io
+
 import random
 
+import cv2 as cv
 import numpy as np
 import scipy.ndimage as ndi
-from PIL import Image
 
 
-def load_as_array(file_or_bytes):
+def load_as_array(file_or_bytes, size=None):
     """Load an image from file and convert it into array.
     The data type of the array is np.uint8.
 
     Args:
-        file_or_bytes: File name, file object or bytes.
+        file_or_bytes: File name, bytes.
+        size (tuple[int]): The loaded image size (height, width).
 
     Returns:
         numpy.ndarray: np.uint8 ndarray represent the image.
@@ -29,11 +30,13 @@ def load_as_array(file_or_bytes):
 
     """
     if isinstance(file_or_bytes, bytes):
-        with io.BytesIO(file_or_bytes) as f:
-            image = Image.open(f)
+        data = np.asarray(bytearray(file_or_bytes), np.byte)
+        image = cv.imdecode(data, cv.IMREAD_UNCHANGED)
     else:
-        image = Image.open(file_or_bytes)
-    return np.asarray(image, dtype=np.uint8)
+        image = cv.imread(file_or_bytes)
+    if size is not None:
+        image = cv.resize(image, size)
+    return np.asarray(image, np.uint8)
 
 
 def save_array(fn_or_fp, array):
@@ -44,8 +47,7 @@ def save_array(fn_or_fp, array):
     :param array: The array.
     :return: None.
     """
-    image = Image.fromarray(array)
-    image.save(fn_or_fp)
+    cv.imwrite(fn_or_fp, array)
 
 
 def array_to_mat(array):
@@ -70,13 +72,14 @@ def mat_to_array(mat):
     return (mat * 128.0 + 127.75).astype(np.uint8)
 
 
-def load_as_mat(file_or_bytes):
+def load_as_mat(file_or_bytes, size=None):
     """Load an image from file and convert it into matrix.
     The data type of the array is np.float32.
     Elements in the matrix must be valued in range -1 ~ 1.
 
     Args:
-        file_or_bytes: File name, file object or bytes.
+        file_or_bytes: File name or bytes.
+        size (tuple[int]): The loaded image size (height, width).
 
     Returns:
         numpy.ndarray: np.float32 ndarray represent the image.
@@ -88,10 +91,12 @@ def load_as_mat(file_or_bytes):
 
     """
     if isinstance(file_or_bytes, bytes):
-        with io.BytesIO(file_or_bytes) as f:
-            image = Image.open(f)
+        data = np.asarray(bytearray(file_or_bytes), np.byte)
+        image = cv.imdecode(data, cv.IMREAD_UNCHANGED)
     else:
-        image = Image.open(file_or_bytes)
+        image = cv.imread(file_or_bytes)
+    if size is not None:
+        image = cv.resize(image, size)
     return (np.asarray(image, dtype=np.float32) - 128.0) / 128.0
 
 

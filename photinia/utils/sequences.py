@@ -4,7 +4,7 @@
 @author: xi
 @since: 2018-02-10
 """
-
+import io
 import pickle
 
 import numpy as np
@@ -13,8 +13,10 @@ import photinia as ph
 
 
 class Vocabulary(object):
+    EOS = ''
 
-    def __init__(self):
+    def __init__(self, add_eos=False):
+        self._add_eos = add_eos
         self._word_dict = dict()
         self._index_dict = dict()
         self._voc_size = 0
@@ -39,7 +41,7 @@ class Vocabulary(object):
             index: word
             for word, index in self._word_dict.items()
         }
-        self._voc_size = len(self._word_dict)
+        self._voc_size = len(self._word_dict) + (1 if self._add_eos else 0)
 
     def generate(self, data_source, words_field):
         """Generate a vocabulary from sentences.
@@ -60,7 +62,7 @@ class Vocabulary(object):
             index: word
             for word, index in self._word_dict.items()
         }
-        self._voc_size = len(self._word_dict)
+        self._voc_size = len(self._word_dict) + (1 if self._add_eos else 0)
 
     @property
     def voc_size(self):
@@ -74,18 +76,52 @@ class Vocabulary(object):
     def index_dict(self):
         return self._index_dict
 
+    def word_to_one_hot(self, word):
+        if word == self.EOS:
+            if self._add_eos:
+                return ph.utils.one_hot(self._voc_size - 1, self._voc_size, np.float32)
+            else:
+                raise ValueError('The vocabulary was not initialized with supporting <EOS>')
+        return ph.utils.one_hot(self._word_dict[word], self._voc_size, np.float32)
+
+    def one_hot_to_word(self, one_hot):
+        index = np.argmax(one_hot)
+        try:
+            return self._index_dict[index]
+        except KeyError:
+            if index == self._voc_size - 1:
+                if self._add_eos:
+                    return self.EOS
+                else:
+                    raise ValueError('The vocabulary was not initialized with supporting <EOS>')
+            else:
+                raise ValueError('Index %d is not in vocabulary.' % index)
+
     def words_to_one_hots(self, words):
         one_hot_list = [
             ph.utils.one_hot(self._word_dict[word], self._voc_size, np.float32)
             for word in words
         ]
+        if self._add_eos:
+            one_hot_list.append(ph.utils.one_hot(self._voc_size - 1, self._voc_size, np.float32))
         return one_hot_list
 
     def one_hots_to_words(self, one_hots):
-        return ''.join((
-            self._index_dict[np.argmax(one_hot)]
-            for one_hot in one_hots
-        ))
+        with io.StringIO() as buffer:
+            for one_hot in one_hots:
+                index = np.argmax(one_hot)
+                try:
+                    word = self._index_dict[index]
+                    buffer.write(word)
+                except KeyError:
+                    if index == self._voc_size - 1:
+                        if self._add_eos:
+                            break
+                        else:
+                            raise ValueError('The vocabulary was not initialized with supporting <EOS>')
+                    else:
+                        raise ValueError('Index %d is not in vocabulary.' % index)
+            return buffer.getvalue()
 
 
 class WordEmbedding(object):

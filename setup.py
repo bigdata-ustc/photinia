@@ -34,5 +34,5 @@ if __name__ == '__main__':
         ],
         include_package_data=True,
         zip_safe=True,
-        install_requires=['numpy', 'scipy', 'pymongo', 'Pillow']
+        install_requires=['numpy', 'scipy', 'pymongo', 'opencv-python']
     )
