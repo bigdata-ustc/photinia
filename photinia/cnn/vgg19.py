@@ -1,25 +1,30 @@
 """
-@Author: zhkun
+@Author: zhkun, xi
 @Time: 2018/07/15 20:23
 @File: vgg19_new
 @Description: 
 @Something to attention: 
 """
+
 import tensorflow as tf
 
 import photinia as ph
-
 import numpy as np
 
-VGG_MEAN = [103.939, 116.779, 123.68]
+HEIGHT = 224
+WIDTH = 224
+SIZE = (HEIGHT, WIDTH)
+
+MEAN = [103.939, 116.779, 123.68]
 
 
-class Vgg19(ph.Widget):
+class VGG19(ph.Widget):
 
-    def __init__(self, name='vgg16'):
-        self._height = 224
-        self._width = 224
-        super(Vgg19, self).__init__(name)
+    def __init__(self, name='vgg19'):
+        self._height = HEIGHT
+        self._width = WIDTH
+        self._mean = np.reshape(MEAN, (1, 1, 1, 3))
+        super(VGG19, self).__init__(name)
 
     def _build(self):
         # conv1 padding=SAME
@@ -181,17 +186,35 @@ class Vgg19(ph.Widget):
         )
         #
         # fc layer
-        self._fc6 = ph.Linear('fc6', input_size=self._pool5.flat_size, output_size=4096)
-        self._fc7 = ph.Linear('fc7', input_size=self._fc6.output_size, output_size=4096)
+        self._fc6 = ph.Linear(
+            'fc6',
+            input_size=self._pool5.flat_size,
+            output_size=4096,
+            w_init=ph.init.TruncatedNormal(stddev=1e-4)
+        )
+        self._fc7 = ph.Linear(
+            'fc7',
+            input_size=self._fc6.output_size,
+            output_size=4096,
+            w_init=ph.init.TruncatedNormal(stddev=1e-4)
+        )
         self._fc8 = ph.Linear(
             'fc8',
             input_size=self._fc7.output_size, output_size=1000,
-            w_init=ph.init.RandomNormal(stddev=1e-4)
+            w_init=ph.init.TruncatedNormal(stddev=1e-4)
         )
 
     @property
-	def fc6(self):
-    	return self._fc6
+    def encode_size(self):
+        return 4096
+
+    @property
+    def output_size(self):
+        return 1000
+
+    @property
+    def fc6(self):
+        return self._fc6
 
     @property
     def fc7(self):
@@ -202,81 +225,31 @@ class Vgg19(ph.Widget):
         return self._fc8
 
     def _setup(self, x):
-        # Convert RGB to BGR
-        red, green, blue = tf.split(axis=3, num_or_size_splits=3, value=x)
-        assert red.get_shape().as_list()[1:] == [224, 224, 1]
-        assert green.get_shape().as_list()[1:] == [224, 224, 1]
-        assert blue.get_shape().as_list()[1:] == [224, 224, 1]
-        bgr = tf.concat(axis=3, values=[
-            blue - VGG_MEAN[0],
-            green - VGG_MEAN[1],
-            red - VGG_MEAN[2],
-        ])
-        assert bgr.get_shape().as_list()[1:] == [224, 224, 3]
-
         h = ph.setup(
-            bgr,
-            [self._conv1_1, tf.nn.relu, self._conv1_2, tf.nn.relu, self._pool1,
-             self._conv2_1, tf.nn.relu, self._conv2_2, tf.nn.relu, self._pool2,
-             self._conv3_1, tf.nn.relu, self._conv3_2, tf.nn.relu, self._conv3_3, tf.nn.relu,
-             self._conv3_4, tf.nn.relu, self._pool3,
-             self._conv4_1, tf.nn.relu, self._conv4_2, tf.nn.relu, self._conv4_3, tf.nn.relu,
-             self._conv4_4, tf.nn.relu, self._pool4,
-             self._conv5_1, tf.nn.relu, self._conv5_2, tf.nn.relu, self._conv5_3, tf.nn.relu,
-             self._conv5_4, tf.nn.relu, self._pool5,
+            x - self._mean,
+            [self._conv1_1, tf.nn.relu,  # 1
+             self._conv1_2, tf.nn.relu, self._pool1,  # 2
+             self._conv2_1, tf.nn.relu,  # 3
+             self._conv2_2, tf.nn.relu, self._pool2,  # 4
+             self._conv3_1, tf.nn.relu,  # 5
+             self._conv3_2, tf.nn.relu,  # 6
+             self._conv3_3, tf.nn.relu,  # 7
+             self._conv3_4, tf.nn.relu, self._pool3,  # 8
+             self._conv4_1, tf.nn.relu,  # 9
+             self._conv4_2, tf.nn.relu,  # 10
+             self._conv4_3, tf.nn.relu,  # 11
+             self._conv4_4, tf.nn.relu, self._pool4,  # 12
+             self._conv5_1, tf.nn.relu,  # 13
+             self._conv5_2, tf.nn.relu,  # 14
+             self._conv5_3, tf.nn.relu,  # 15
+             self._conv5_4, tf.nn.relu, self._pool5,  # 16
              ph.ops.flatten,
-             self._fc6, tf.nn.relu,
-             self._fc7, tf.nn.relu]
+             self._fc6, tf.nn.relu,  # 17
+             self._fc7, tf.nn.relu]  # 18
         )
-        y = self._fc8.setup(h)
+        y = self._fc8.setup(h)  # 19
         y = tf.nn.softmax(y)
         return y, h
 
-    @staticmethod
-    def _lrn(x):
-        return tf.nn.local_response_normalization(
-            x,
-            depth_radius=1,
-            alpha=1e-5,
-            beta=0.75,
-            bias=1.0
-        )
-
-    def load_pretrain(self, model_file='vgg19'):
-        ph.io.load_model_from_tree(self, model_file)
-
-    def load_parameters(self, prepath=None, model_file='vgg19.npy'):
-        self.data_dict = np.load(model_file, encoding='latin1').item()
-        param_dict = {}
-        if prepath is None:
-        	prepath = 'vgg19'
-        else:
-        	prepath = prepath + '/vgg16'
-
-        for op_name in self.data_dict:
-            for param in self.data_dict[op_name]:
-                if len(param.shape) == 1:
-                    param_dict[prepath + '/' + op_name + '/b:0'] = param
-                else:
-                    param_dict[prepath + '/' + op_name + '/w:0'] = param
-
-        return param_dict
-
-
-if __name__ == '__main__':
-    dumper = ph.io.dumpers.TreeDumper('checkpoint')
-    configs = tf.ConfigProto()
-    configs.gpu_options.allow_growth = True
-
-    with tf.Session(config=configs) as sess:
-        model = Vgg19()
-
-        sess.run(tf.global_variables_initializer())
-
-        # pre_train_parameter = model.load_parameters()
-        # model.set_parameters(pre_train_parameter)
-        #
-        # dumper.dump(model, 'vgg19')
-
-        model.load_pretrain('checkpoint/vgg19')
-        print('load succeed')
+    def load_parameters(self, model_file):
+        ph.io.load_model_from_file(self, model_file, 'vgg19')
