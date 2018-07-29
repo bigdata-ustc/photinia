@@ -393,29 +393,36 @@ class ThreadBufferedSource(DataSource):
             raise ValueError('Argument buffer_size should be a positive integer.')
         #
         # Async Loading
-        self._main_thread = threading.current_thread()
-        self._queue = queue.Queue()
-        self._load_threshold = self._buffer_size // 3
+        # self._main_thread = threading.current_thread()
+        self._queue = queue.Queue(buffer_size)
+        # self._load_threshold = self._buffer_size // 3
         self._thread = None
-        self._thread_lock = threading.Semaphore(1)
+        # self._thread_lock = threading.Semaphore(1)
 
     def meta(self):
         return self._input_source.meta()
 
     def next(self):
-        if (self._queue.qsize() <= self._load_threshold
-                and (self._thread is None or not self._thread.is_alive())):
+        if self._thread is None:
             self._thread = threading.Thread(target=self._load)
+            self._thread.setDaemon(True)
             self._thread.start()
-        while True:
-            try:
-                row = self._queue.get(block=True, timeout=1)
-            except queue.Empty:
-                if self._thread is None or not self._thread.is_alive():
-                    self._thread = threading.Thread(target=self._load)
-                    self._thread.start()
-                continue
-            break
+        # if (self._queue.qsize() <= self._load_threshold
+        #         and (self._thread is None or not self._thread.is_alive())):
+        #     self._thread = threading.Thread(target=self._load)
+        #     self._thread.setDaemon(True)
+        #     self._thread.start()
+        # while True:
+        #     try:
+        #         row = self._queue.get(block=True)
+        #     except queue.Empty:
+        #         if self._thread is None or not self._thread.is_alive():
+        #             self._thread = threading.Thread(target=self._load)
+        #             self._thread.setDaemon(True)
+        #             self._thread.start()
+        #         continue
+        #     break
+        row = self._queue.get(block=True)
         if isinstance(row, Exception):
             raise row
         return row
@@ -424,13 +431,14 @@ class ThreadBufferedSource(DataSource):
         """This method is executed in another thread!
         """
         # print('DEBUG: Loading thread started.')
-        for i in range(self._buffer_size):
+        # for i in range(self._buffer_size):
+        while True:
             try:
                 row = self._input_source.next()
             except Exception as e:
                 self._queue.put(e)
                 break
             self._queue.put(row, block=True)
-            if not self._main_thread.is_alive():
-                break
+        # if not self._main_thread.is_alive():
+        #     break
         # print('DEBUG: Loading thread stopped. %d loaded' % (i + 1))
