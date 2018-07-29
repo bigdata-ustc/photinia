@@ -1,103 +1,223 @@
 #!/usr/bin/env python3
 
 """
-@author: xi
-@since: 2017-12-25
+@Author: zhkun, xi
+@Time: 2018/07/13 20:53
+@File: vgg16_new
+@Description: 
+@Something to attention: 
 """
 
+import numpy as np
+import tensorflow as tf
+
 import photinia as ph
+
+HEIGHT = 224
+WIDTH = 224
+SIZE = (HEIGHT, WIDTH)
+
+MEAN = [103.939, 116.779, 123.68]
 
 
 class VGG16(ph.Widget):
 
-    def __init__(self,
-                 name,
-                 input_size,
-                 output_size):
-        self._input_size = input_size
-        self._output_size = output_size
-        self._input_height = input_size[0]
-        self._input_width = input_size[1]
-        self._input_channels = input_size[2]
+    def __init__(self, name='vgg16'):
+        self._height = HEIGHT
+        self._width = WIDTH
+        self._mean = np.reshape(MEAN, (1, 1, 1, 3))
         super(VGG16, self).__init__(name)
 
-    @property
-    def input_size(self):
-        return self._input_size
+    def _build(self):
+        # conv1 padding=SAME
+        self._conv1_1 = ph.Conv2D(
+            'conv1_1',
+            input_size=[self._height, self._width, 3],
+            output_channels=64,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        # conv1_2 padding=SAME
+        self._conv1_2 = ph.Conv2D(
+            'conv1_2',
+            input_size=self._conv1_1.output_size,
+            output_channels=64,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._pool1 = ph.Pool2D(
+            'pool1',
+            input_size=self._conv1_2.output_size,
+            filter_height=2, filter_width=2, stride_height=2, stride_width=2,
+            padding='SAME',
+            pool_type='max'
+        )
+        #
+        # conv2 padding=SAME
+        self._conv2_1 = ph.Conv2D(
+            'conv2_1',
+            input_size=self._pool1.output_size,
+            output_channels=128,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._conv2_2 = ph.Conv2D(
+            'conv2_2',
+            input_size=self._conv2_1.output_size,
+            output_channels=128,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._pool2 = ph.Pool2D(
+            'pool2',
+            input_size=self._conv2_2.output_size,
+            filter_height=2, filter_width=2, stride_height=2, stride_width=2,
+            padding='SAME',
+            pool_type='max'
+        )
+        #
+        # conv3 padding=SAME
+        self._conv3_1 = ph.Conv2D(
+            'conv3_1',
+            input_size=self._pool2.output_size,
+            output_channels=256,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._conv3_2 = ph.Conv2D(
+            'conv3_2',
+            input_size=self._conv3_1.output_size,
+            output_channels=256,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._conv3_3 = ph.Conv2D(
+            'conv3_3',
+            input_size=self._conv3_2.output_size,
+            output_channels=256,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._pool3 = ph.Pool2D(
+            'pool3',
+            input_size=self._conv3_3.output_size,
+            filter_height=2, filter_width=2, stride_height=2, stride_width=2,
+            padding='SAME',
+            pool_type='max'
+        )
+        #
+        # conv4 padding=SAME
+        self._conv4_1 = ph.Conv2D(
+            'conv4_1',
+            input_size=self._pool3.output_size,
+            output_channels=512,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._conv4_2 = ph.Conv2D(
+            'conv4_2',
+            input_size=self._conv4_1.output_size,
+            output_channels=512,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._conv4_3 = ph.Conv2D(
+            'conv4_3',
+            input_size=self._conv4_2.output_size,
+            output_channels=512,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._pool4 = ph.Pool2D(
+            'pool4',
+            input_size=self._conv4_3.output_size,
+            filter_height=2, filter_width=2, stride_height=2, stride_width=2,
+            padding='SAME',
+            pool_type='max'
+        )
+        #
+        # conv5 padding=SAME
+        self._conv5_1 = ph.Conv2D(
+            'conv5_1',
+            input_size=self._pool4.output_size,
+            output_channels=512,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._conv5_2 = ph.Conv2D(
+            'conv5_2',
+            input_size=self._conv5_1.output_size,
+            output_channels=512,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._conv5_3 = ph.Conv2D(
+            'conv5_3',
+            input_size=self._conv5_2.output_size,
+            output_channels=512,
+            filter_height=3, filter_width=3, stride_width=1, stride_height=1,
+            padding='SAME'
+        )
+        self._pool5 = ph.Pool2D(
+            'pool5',
+            input_size=self._conv5_3.output_size,
+            filter_height=2, filter_width=2, stride_height=2, stride_width=2,
+            padding='SAME',
+            pool_type='max'
+        )
+        #
+        # fc layer
+        self._fc6 = ph.Linear('fc6', input_size=self._pool5.flat_size, output_size=4096)
+        self._fc7 = ph.Linear('fc7', input_size=self._fc6.output_size, output_size=4096)
+        self._fc8 = ph.Linear(
+            'fc8',
+            input_size=self._fc7.output_size, output_size=1000,
+            w_init=ph.init.RandomNormal(stddev=1e-4)
+        )
 
     @property
-    def input_height(self):
-        return self._input_height
-
-    @property
-    def input_width(self):
-        return self._input_width
-
-    @property
-    def input_channels(self):
-        return self._input_channels
+    def encode_size(self):
+        return 4096
 
     @property
     def output_size(self):
-        return self._output_size
+        return 1000
 
-    def _build(self):
-        self._c1 = ph.Conv2D('c1', self._input_size, 64, 3, 3)
-        self._c2 = ph.Conv2D('c2', self._c1.output_size, 64, 3, 3)
-        self._p1 = ph.Pool2D('p1', self._c2.output_size, 2, 2)
-        #
-        self._c3 = ph.Conv2D('c3', self._p1.output_size, 128, 3, 3)
-        self._c4 = ph.Conv2D('c4', self._c3.output_size, 128, 3, 3)
-        self._p2 = ph.Pool2D('p2', self._c4.output_size, 2, 2)
-        #
-        self._c5 = ph.Conv2D('c5', self._p2.output_size, 256, 3, 3)
-        self._c6 = ph.Conv2D('c6', self._c5.output_size, 256, 3, 3)
-        self._c7 = ph.Conv2D('c7', self._c6.output_size, 256, 3, 3)
-        self._p3 = ph.Pool2D('p3', self._c7.output_size, 2, 2)
-        #
-        self._c8 = ph.Conv2D('c8', self._p3.output_size, 512, 3, 3)
-        self._c9 = ph.Conv2D('c9', self._c8.output_size, 512, 3, 3)
-        self._c10 = ph.Conv2D('c10', self._c9.output_size, 512, 3, 3)
-        self._p4 = ph.Pool2D('p4', self._c10.output_size, 2, 2)
-        #
-        self._c11 = ph.Conv2D('c11', self._p4.output_size, 512, 3, 3)
-        self._c12 = ph.Conv2D('c12', self._c11.output_size, 512, 3, 3)
-        self._c13 = ph.Conv2D('c13', self._c12.output_size, 512, 3, 3)
-        self._p5 = ph.Pool2D('p5', self._c13.output_size, 2, 2)
-        #
-        self._h1 = ph.Linear(
-            'h1', self._p5.flat_size, 4096,
-            w_init=ph.init.RandomNormal(stddev=1e-4)
-        )
-        self._h2 = ph.Linear(
-            'h2', self._h1.output_size, 4096,
-            w_init=ph.init.RandomNormal(stddev=1e-4)
-        )
-        self._h3 = ph.Linear(
-            'h3', self._h2.output_size, self._output_size,
-            w_init=ph.init.RandomNormal(stddev=1e-4)
-        )
+    @property
+    def fc6(self):
+        return self._fc6
 
-    def _setup(self, x, dropout=None, activation=ph.ops.swish):
-        s = activation
-        y = ph.setup(
-            x,
-            [self._c1, s, dropout,
-             self._c2, s, self._p1,
-             self._c3, s, dropout,
-             self._c4, s, self._p2,
-             self._c5, s, dropout,
-             self._c6, s, dropout,
-             self._c7, s, self._p3,
-             self._c8, s, dropout,
-             self._c9, s, dropout,
-             self._c10, s, self._p4,
-             self._c11, s, dropout,
-             self._c12, s, dropout,
-             self._c13, s, self._p5, dropout,
+    @property
+    def fc7(self):
+        return self._fc7
+
+    @property
+    def fc8(self):
+        return self._fc8
+
+    def _setup(self, x):
+        h = ph.setup(
+            x - self._mean,
+            [self._conv1_1, tf.nn.relu,  # 1
+             self._conv1_2, tf.nn.relu, self._pool1,  # 2
+             self._conv2_1, tf.nn.relu,  # 3
+             self._conv2_2, tf.nn.relu, self._pool2,  # 4
+             self._conv3_1, tf.nn.relu,  # 5
+             self._conv3_2, tf.nn.relu,  # 6
+             self._conv3_3, tf.nn.relu, self._pool3,  # 7
+             self._conv4_1, tf.nn.relu,  # 8
+             self._conv4_2, tf.nn.relu,  # 9
+             self._conv4_3, tf.nn.relu, self._pool4,  # 10
+             self._conv5_1, tf.nn.relu,  # 11
+             self._conv5_2, tf.nn.relu,  # 12
+             self._conv5_3, tf.nn.relu, self._pool5,  # 13
              ph.ops.flatten,
-             self._h1, s, dropout,
-             self._h2, s, dropout,
-             self._h3]
+             self._fc6, tf.nn.relu,  # 14
+             self._fc7, tf.nn.relu]  # 15
         )
-        return y
+        y = self._fc8.setup(h)  # 16
+        y = tf.nn.softmax(y)
+        return y, h
+
+    def load_parameters(self, model_file):
+        ph.io.load_model_from_file(self, model_file, 'vgg16')
