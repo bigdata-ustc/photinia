@@ -73,7 +73,7 @@ class ModelDumper(object):
             for key, value in param_dict.items():
                 if not key.startswith(path):
                     continue
-                key, _ = re.subn('^%s' % path, widget.name, key)
+                key, _ = re.subn('^%s' % path, widget.full_name, key)
                 new_dict[key] = value
             param_dict = new_dict
         widget.set_parameters(param_dict, strict)
