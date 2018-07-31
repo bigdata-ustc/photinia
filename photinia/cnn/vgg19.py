@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
+
 """
-@Author: zhkun, xi
-@Time: 2018/07/15 20:23
-@File: vgg19_new
-@Description: 
-@Something to attention: 
+@author: zhkun, xi
+@since: 2018-07-05
+
+The pre-trained parameters can be downloaded from:
+
+https://pan.baidu.com/s/1L3tCjS4mR5aIMm_O0MOW2Q
+
+Use "model.load_parameters(path)" to load.
 """
 
 import tensorflow as tf

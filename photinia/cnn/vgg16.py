@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 
+
 """
-@Author: zhkun, xi
-@Time: 2018/07/13 20:53
-@File: vgg16_new
-@Description: 
-@Something to attention: 
+@author: zhukun, xi
+@since: 2018-07-13
+
+
+The pre-trained parameters can be downloaded from:
+
+https://pan.baidu.com/s/1tae2EtyDw3JMgcxUyFgJbg
+
+Use "model.load_parameters(path)" to load.
 """
 
 import numpy as np
