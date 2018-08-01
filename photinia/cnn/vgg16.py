@@ -200,29 +200,28 @@ class VGG16(ph.Widget):
     def fc8(self):
         return self._fc8
 
-    def _setup(self, x):
-        h = ph.setup(
+    def _setup(self, x, name=None):
+        y = ph.setup(
             x - self._mean,
-            [self._conv1_1, tf.nn.relu,  # 1
-             self._conv1_2, tf.nn.relu, self._pool1,  # 2
-             self._conv2_1, tf.nn.relu,  # 3
-             self._conv2_2, tf.nn.relu, self._pool2,  # 4
-             self._conv3_1, tf.nn.relu,  # 5
-             self._conv3_2, tf.nn.relu,  # 6
-             self._conv3_3, tf.nn.relu, self._pool3,  # 7
-             self._conv4_1, tf.nn.relu,  # 8
-             self._conv4_2, tf.nn.relu,  # 9
-             self._conv4_3, tf.nn.relu, self._pool4,  # 10
-             self._conv5_1, tf.nn.relu,  # 11
-             self._conv5_2, tf.nn.relu,  # 12
-             self._conv5_3, tf.nn.relu, self._pool5,  # 13
+            [self._conv1_1, (tf.nn.relu, 'map1_1'),  # 1
+             self._conv1_2, (tf.nn.relu, 'map1_2'), self._pool1,  # 2
+             self._conv2_1, (tf.nn.relu, 'map2_1'),  # 3
+             self._conv2_2, (tf.nn.relu, 'map2_2'), self._pool2,  # 4
+             self._conv3_1, (tf.nn.relu, 'map3_1'),  # 5
+             self._conv3_2, (tf.nn.relu, 'map3_2'),  # 6
+             self._conv3_3, (tf.nn.relu, 'map3_3'), self._pool3,  # 7
+             self._conv4_1, (tf.nn.relu, 'map4_1'),  # 8
+             self._conv4_2, (tf.nn.relu, 'map4_2'),  # 9
+             self._conv4_3, (tf.nn.relu, 'map4_3'), self._pool4,  # 10
+             self._conv5_1, (tf.nn.relu, 'map5_1'),  # 11
+             self._conv5_2, (tf.nn.relu, 'map5_2'),  # 12
+             self._conv5_3, (tf.nn.relu, 'map5_3'), self._pool5,  # 13
              ph.ops.flatten,
-             self._fc6, tf.nn.relu,  # 14
-             self._fc7, tf.nn.relu]  # 15
+             self._fc6, (tf.nn.relu, 'h6'),  # 14
+             self._fc7, (tf.nn.relu, 'h7'),  # 15
+             self._fc8, (tf.nn.softmax, name)]  # 16
         )
-        y = self._fc8.setup(h)  # 16
-        y = tf.nn.softmax(y)
-        return y, h
+        return y
 
     def load_parameters(self, model_file):
         ph.io.load_model_from_file(self, model_file, 'vgg16')

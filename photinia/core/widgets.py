@@ -352,6 +352,8 @@ def setup(x, widget_list):
                 y = fn(y, **kwargs)
             elif isinstance(w[1], str):
                 y = fn(y, name=w[1])
+            elif w[1] is None:
+                y = fn(y)
             else:
                 raise ValueError('The second term of the tuple must be str or dict.')
         elif w is None:
@@ -453,7 +455,7 @@ class Linear(Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x, axes=None):
+    def _setup(self, x, axes=None, name=None):
         """Setup the layer.
 
         Args:
@@ -464,9 +466,11 @@ class Linear(Widget):
             tf.Tensor: Output tensor.
 
         """
-        y = tf.matmul(x, self._w) if axes is None else tf.tensordot(x, self._w, axes=axes)
         if self._with_bias:
-            y += self._b
+            y = tf.matmul(x, self._w) if axes is None else tf.tensordot(x, self._w, axes=axes)
+            y = tf.add(y, self._b, name=name)
+        else:
+            y = tf.matmul(x, self._w, name=name) if axes is None else tf.tensordot(x, self._w, axes, name=name)
         return y
 
 
@@ -494,7 +498,7 @@ class Dropout(Widget):
                 dtype=conf.dtype
             )
 
-    def _setup(self, x):
+    def _setup(self, x, name=None):
         """Setup dropout.
 
         Args:
@@ -504,7 +508,7 @@ class Dropout(Widget):
             tf.Tensor: Output tensor.
 
         """
-        return tf.nn.dropout(x, self._keep_prob)
+        return tf.nn.dropout(x, self._keep_prob, name=name)
 
 
 class Conv2D(Widget):
@@ -519,8 +523,7 @@ class Conv2D(Widget):
                  stride_width=1,
                  padding='SAME',
                  w_init=init.TruncatedNormal(),
-                 b_init=init.Zeros(),
-                 flat_output=False):
+                 b_init=init.Zeros()):
         """2D convolutional layer
 
         Args:
@@ -534,7 +537,6 @@ class Conv2D(Widget):
             padding (str): Padding type. Should be one of {"SAME", "VALID"}. Default is "SAME".
             w_init (init.Initializer): Weight(Kernel) initializer.
             b_init (initializers.Initializer): Bias initializer.
-            flat_output (bool): If True, the output will be converted into flat vector(with shape batch_size * dim).
 
         """
         if not (isinstance(input_size, (tuple, list)) and len(input_size) == 3):
@@ -550,7 +552,6 @@ class Conv2D(Widget):
         self._padding = padding
         self._w_init = w_init
         self._b_init = b_init
-        self._flat_output = flat_output
         #
         if self._padding == 'SAME':
             self._output_height = math.ceil(self._input_height / stride_height)
@@ -610,14 +611,6 @@ class Conv2D(Widget):
         return self._stride_width
 
     @property
-    def flat_output(self):
-        return self._flat_output
-
-    @flat_output.setter
-    def flat_output(self, flat_output):
-        self._flat_output = flat_output
-
-    @property
     def flat_size(self):
         return self._flat_size
 
@@ -650,11 +643,12 @@ class Conv2D(Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x):
+    def _setup(self, x, name=None):
         """Setup 2D convolutional layer.
 
         Args:
             x (tf.Tensor): Input tensor.
+            name (str): Output name.
 
         Returns:
             tf.Tensor: Output tensor.
@@ -666,9 +660,8 @@ class Conv2D(Widget):
             strides=[1, self._stride_height, self._stride_width, 1],
             padding=self._padding,
             data_format='NHWC'
-        ) + self._b
-        if self._flat_output:
-            y = tf.reshape(y, (-1, self._flat_size))
+        )
+        y = tf.add(y, self._b, name=name)
         return y
 
 
@@ -755,11 +748,12 @@ class Pool2D(Widget):
     def _build(self):
         pass
 
-    def _setup(self, x):
+    def _setup(self, x, name=None):
         """Setup pooling layer for 2D.
 
         Args:
             x (tf.Tensor): Input tensor.
+            name (str): Output name.
 
         Returns:
             tf.Tensor: Output tensor.
@@ -771,18 +765,21 @@ class Pool2D(Widget):
                 ksize=[1, self._filter_height, self._filter_width, 1],
                 strides=[1, self._stride_height, self._stride_width, 1],
                 padding=self._padding,
-                data_format='NHWC'
+                data_format='NHWC',
+                name=name
             )
-            return y
         elif self._pool_type == 'avg':
             y = tf.nn.avg_pool(
                 value=x,
                 ksize=[1, self._filter_height, self._filter_width, 1],
                 strides=[1, self._stride_height, self._stride_width, 1],
                 padding=self._padding,
-                data_format='NHWC'
+                data_format='NHWC',
+                name=name
             )
-            return y
+        else:
+            raise ValueError('pool_type should be one of {"max", "avg"}')
+        return y
 
 
 class GroupConv2D(Widget):
@@ -801,8 +798,7 @@ class GroupConv2D(Widget):
                  padding='SAME',
                  data_format='NHWC',
                  w_init=init.TruncatedNormal(),
-                 b_init=init.Zeros(),
-                 flat_output=False):
+                 b_init=init.Zeros()):
         if not (isinstance(input_size, (tuple, list)) and len(input_size) == 3):
             raise ValueError('input_size should be tuple or list with 3 elements.')
         self._input_height = input_size[0]
@@ -818,7 +814,6 @@ class GroupConv2D(Widget):
         self._padding = padding
         self._w_init = w_init
         self._b_init = b_init
-        self._flat_output = flat_output
         #
         if self._padding == 'SAME':
             self._output_height = math.ceil(self._input_height / stride_height)
@@ -882,14 +877,6 @@ class GroupConv2D(Widget):
         return self._stride_width
 
     @property
-    def flat_output(self):
-        return self._flat_output
-
-    @flat_output.setter
-    def flat_output(self, flat_output):
-        self._flat_output = flat_output
-
-    @property
     def flat_size(self):
         return self._flat_size
 
@@ -922,7 +909,7 @@ class GroupConv2D(Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x):
+    def _setup(self, x, name=None):
         x_list = tf.split(value=x, num_or_size_splits=self._num_groups, axis=3)
         w_list = tf.split(value=self._w, num_or_size_splits=self._num_groups, axis=3)
         y_list = [
@@ -935,9 +922,8 @@ class GroupConv2D(Widget):
             )
             for x, w in zip(x_list, w_list)
         ]
-        y = tf.concat(values=y_list, axis=3) + self._b
-        if self._flat_output:
-            y = tf.reshape(y, (-1, self._flat_size))
+        y = tf.concat(values=y_list, axis=3)
+        y = tf.add(y, self._b, name=name)
         return y
 
 
@@ -1072,11 +1058,12 @@ class Conv2DTrans(Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x):
+    def _setup(self, x, name=None):
         """Setup transpose convolutional layer.
 
         Args:
             x (tf.Tensor): Input tensor.
+            name (str): Output name.
 
         Returns:
             tf.Tensor: Output tensor.
@@ -1097,7 +1084,8 @@ class Conv2DTrans(Widget):
             strides=[1, self._stride_height, self._stride_width, 1],
             padding='SAME',
             data_format='NHWC'
-        ) + self._b
+        )
+        y = tf.add(y, self._b, name=name)
         return y
 
 
@@ -1257,35 +1245,40 @@ class GRUCell(Widget):
     def bh(self):
         return self._bh if self._with_bias else None
 
-    def _setup(self, x, h_):
+    def _setup(self, x, prev_h, name):
         """Setup the cell.
 
-        :param x: The input tensor.
-        :param h_: Previous state tensor.
-        :return: State tensor.
+        Args:
+            x: Input Tensor.
+            prev_h: Previous state tensor.
+            name (str): Output name.
+
+        Returns:
+            tf.Tensor: State tensor.
+
         """
         if self._with_bias:
             z = tf.sigmoid(
-                tf.matmul(x, self._wz) + tf.matmul(h_, self._uz) + self._bz,
+                tf.matmul(x, self._wz) + tf.matmul(prev_h, self._uz) + self._bz,
                 name='update_gate'
             )
             r = tf.sigmoid(
-                tf.matmul(x, self._wr) + tf.matmul(h_, self._ur) + self._br,
+                tf.matmul(x, self._wr) + tf.matmul(prev_h, self._ur) + self._br,
                 name='reset_gate'
             )
-            h = tf.matmul(x, self._wh) + tf.matmul(r * h_, self._uh) + self._bh
+            h = tf.matmul(x, self._wh) + tf.matmul(r * prev_h, self._uh) + self._bh
         else:
             z = tf.sigmoid(
-                tf.matmul(x, self._wz) + tf.matmul(h_, self._uz),
+                tf.matmul(x, self._wz) + tf.matmul(prev_h, self._uz),
                 name='update_gate'
             )
             r = tf.sigmoid(
-                tf.matmul(x, self._wr) + tf.matmul(h_, self._ur),
+                tf.matmul(x, self._wr) + tf.matmul(prev_h, self._ur),
                 name='reset_gate'
             )
-            h = tf.matmul(x, self._wh) + tf.matmul(r * h_, self._uh)
+            h = tf.matmul(x, self._wh) + tf.matmul(r * prev_h, self._uh)
         h = self._activation(h) if self._activation is not None else h
-        h = z * h_ + (1.0 - z) * h
+        h = tf.add(z * prev_h, (1.0 - z) * h, name=name)
         return h
 
     def setup_sequence(self,
@@ -1891,19 +1884,21 @@ class SoftAttention(Widget):
     def omega(self):
         return self._omega
 
-    def _setup(self, seq, vec, seq_length=None, activation=tf.nn.tanh):
+    def _setup(self, seq, vec, seq_length=None, activation=tf.nn.tanh, name='out'):
         """Setup a soft attention mechanism for the given context sequence and state.
         The result is an attention context for the state.
 
-        :param seq: The sequence tensor.
-            Its shape is defined as (seq_length, batch_size, seq_elem_size).
-        :param vec: The vector tensor.
-            Its shape is defined as (batch_size, vec_size).
-        :param seq_length: Sequence length tensor.
-            Shape is define as (batch_size,)
-        :param activation: The activation function.
-            Default is tf.nn.tanh.
-        :return: An attention context with shape (batch_size, seq_elem_size).
+        Args:
+            seq: The sequence tensor with shape (seq_length, batch_size, seq_elem_size).
+            vec: The vector tensor with shape (batch_size, vec_size).
+            seq_length: Sequence length tensor with shape (batch_size,)
+            activation: The activation function.
+                Default is tf.nn.tanh.
+            name (str): Output name.
+
+        Returns:
+            tf.Tensor: An attention context with shape (batch_size, seq_elem_size).
+
         """
         #
         # (batch_size, seq_length, seq_elem_size) -> (seq_length, batch_size, seq_elem_size)
@@ -1925,18 +1920,18 @@ class SoftAttention(Widget):
         a = activation(a + b) if activation is not None else a + b
         a = tf.tensordot(a, self._omega, ((2,), (0,)))
         if seq_length is None:
-            a = tf.nn.softmax(a, dim=0)
+            a = tf.nn.softmax(a, dim=0, name='a')
         else:
             m = tf.sequence_mask(seq_length, dtype=conf.dtype)  # (batch_size, seq_length)
             m_shape = tf.shape(m)
             m = tf.reshape(tf.transpose(m), (m_shape[1], m_shape[0], 1))
             s = tf.exp(a)
-            a = s / tf.reduce_sum(s * m, axis=0, keep_dims=True)
+            a = tf.div(s, tf.reduce_sum(s * m, axis=0, keep_dims=True), name='a')
         #
         # (seq_length, batch_size, 1) * (seq_length, batch_size, seq_elem_size)
         # -> (seq_length, batch_size, seq_elem_size)
         # -> (batch_size, seq_elem_size)
-        att_context = tf.reduce_sum(a * seq, 0)
+        att_context = tf.reduce_sum(a * seq, 0, name=name)
         return att_context
 
 
@@ -1964,7 +1959,7 @@ class Gate(Widget):
             self._w_list.append(w)
         self._b = variable('b', self._b_init.build((self._output_size,), name='b_init'))
 
-    def _setup(self, *x_list):
+    def _setup(self, *x_list, name='out'):
         if len(x_list) != len(self._w_list):
             raise ValueError()
         y = None
@@ -1974,7 +1969,7 @@ class Gate(Widget):
             else:
                 y += tf.matmul(x, self._w_list[i])
         y += self._b
-        y = tf.nn.sigmoid(y)
+        y = tf.nn.sigmoid(y, name=name)
         return y
 
 
@@ -1989,7 +1984,7 @@ class ResidualLinear(Widget):
                  size,
                  num_layers=1,
                  w_init=init.GlorotUniform(),
-                 b_init=init.GlorotUniform()):
+                 b_init=init.Zeros()):
         """Residual network cell for DNN.
 
         Args:
@@ -2030,12 +2025,12 @@ class ResidualLinear(Widget):
             )
             self._layers.append(layer)
 
-    def _setup(self, x, activation=ops.lrelu):
+    def _setup(self, x, activation=ops.lrelu, name='out'):
         """Setup.
 
         Args:
-            x (tf.Tensor): Input tensor.
-            activation ((tf.Tensor) -> tf.Tensor): Activation function.
+            x: Input tensor.
+            activation: Activation function.
 
         Returns:
             tf.Tensor: Output Tensor.
@@ -2046,10 +2041,9 @@ class ResidualLinear(Widget):
             h = layer.setup(h)
             if activation is not None:
                 h = activation(h)
+
         h = self._layers[-1].setup(h)
-        h = h + x
-        if activation is not None:
-            h = activation(h)
+        h = tf.add(h, x, name=name)
         return h
 
 
@@ -2094,7 +2088,7 @@ class HighWayLinear(Widget):
             b_init=self._b_init
         )
 
-    def _setup(self, x, activation=ops.lrelu):
+    def _setup(self, x, activation=ops.lrelu, name='out'):
         """Setup.
 
         Args:
@@ -2112,5 +2106,9 @@ class HighWayLinear(Widget):
         g = self._gate.setup(x)
         g = tf.nn.sigmoid(g)
 
-        y = tf.multiply(g, h) + tf.multiply((1.0 - g), x)
+        y = tf.add(
+            tf.multiply(g, h),
+            tf.multiply((1.0 - g), x),
+            name=name
+        )
         return y
