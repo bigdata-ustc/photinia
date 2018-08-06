@@ -18,7 +18,7 @@ if __name__ == '__main__':
             'photinia.misc',
             'photinia.testing'
         ],
-        version='0.4.0',
+        version='0.5.0',
         keywords=('deep learning', 'neural network'),
         description='Build deep learning models quickly for scientists in an object-oriented way.',
         long_description=long_description,
