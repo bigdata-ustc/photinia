@@ -5,6 +5,6 @@
 @since: 2018-06-20
 """
 
-from .core import *
+from .common import *
 
 from . import ddpg

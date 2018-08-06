@@ -15,8 +15,23 @@ from photinia import deep_rl
 from photinia.deep_rl import ddpg
 
 
+class Agent(ddpg.DDPGAgent):
+
+    def __init__(self, name, state_size, action_size, hidden_size=50):
+        super(Agent, self).__init__(
+            name,
+            deep_rl.MLPActor('source_actor', state_size, action_size, hidden_size),
+            deep_rl.MLPActor('target_actor', state_size, action_size, hidden_size),
+            deep_rl.MLPCritic('source_critic', state_size, action_size, hidden_size * 2),
+            deep_rl.MLPCritic('target_critic', state_size, action_size, hidden_size * 2),
+            ph.placeholder('source_state', (None, state_size)),
+            ph.placeholder('target_state', (None, state_size)),
+            ph.placeholder('reward', (None,))
+        )
+
+
 def main(args):
-    model = ddpg.Agent('agent', 3, 1)
+    model = Agent('agent', 3, 1)
     ph.initialize_global_variables()
     model.init()
 
@@ -43,7 +58,7 @@ def main(args):
             s = s_
             if done:
                 print('[%d] %f' % (i, total_r))
-                if total_r > -300:
+                if total_r > -300 and i >= 100:
                     render = True
                 break
     return 0
