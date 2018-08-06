@@ -455,12 +455,13 @@ class Linear(Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x, axes=None, name=None):
+    def _setup(self, x, axes=None, name='out'):
         """Setup the layer.
 
         Args:
             x (tf.Tensor): Input tensor.
             axes (tuple[int]|list[int]): If x is a tensor, the layer will perform tensor dot.
+            name (str): Output name.
 
         Returns:
             tf.Tensor: Output tensor.
@@ -498,11 +499,12 @@ class Dropout(Widget):
                 dtype=conf.dtype
             )
 
-    def _setup(self, x, name=None):
+    def _setup(self, x, name='out'):
         """Setup dropout.
 
         Args:
             x (tf.Tensor): Input tensor.
+            name (str): Output name.
 
         Returns:
             tf.Tensor: Output tensor.
@@ -643,7 +645,7 @@ class Conv2D(Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x, name=None):
+    def _setup(self, x, name='out'):
         """Setup 2D convolutional layer.
 
         Args:
@@ -748,7 +750,7 @@ class Pool2D(Widget):
     def _build(self):
         pass
 
-    def _setup(self, x, name=None):
+    def _setup(self, x, name='out'):
         """Setup pooling layer for 2D.
 
         Args:
@@ -909,7 +911,7 @@ class GroupConv2D(Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x, name=None):
+    def _setup(self, x, name='out'):
         x_list = tf.split(value=x, num_or_size_splits=self._num_groups, axis=3)
         w_list = tf.split(value=self._w, num_or_size_splits=self._num_groups, axis=3)
         y_list = [
@@ -1058,7 +1060,7 @@ class Conv2DTrans(Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x, name=None):
+    def _setup(self, x, name='out'):
         """Setup transpose convolutional layer.
 
         Args:
@@ -1245,7 +1247,7 @@ class GRUCell(Widget):
     def bh(self):
         return self._bh if self._with_bias else None
 
-    def _setup(self, x, prev_h, name):
+    def _setup(self, x, prev_h, name='out'):
         """Setup the cell.
 
         Args:
@@ -2031,6 +2033,7 @@ class ResidualLinear(Widget):
         Args:
             x: Input tensor.
             activation: Activation function.
+            name (str): Output name.
 
         Returns:
             tf.Tensor: Output Tensor.
@@ -2094,6 +2097,7 @@ class HighWayLinear(Widget):
         Args:
             x (tf.Tensor): Input tensor.
             activation ((tf.Tensor) -> tf.Tensor): Activation function.
+            name (str): Output name.
 
         Returns:
             tf.Tensor: Output Tensor.
