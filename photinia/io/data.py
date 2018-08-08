@@ -385,7 +385,7 @@ class BatchSource(DataSource):
 
 class ThreadBufferedSource(DataSource):
 
-    def __init__(self, input_source, buffer_size=10000):
+    def __init__(self, input_source, buffer_size=1000):
         self._input_source = input_source
         if isinstance(buffer_size, int) and buffer_size > 0:
             self._buffer_size = buffer_size
