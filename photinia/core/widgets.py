@@ -1308,24 +1308,24 @@ class GRUCell(Widget):
         def fn(acc, elem):
             cell_input = setup(elem, input_widgets)
             state = self.setup(cell_input, acc)
-            if output_widgets is None:
-                return state
-            else:
-                output = setup(state, output_widgets)
-                return state, output
+            return state
 
-        states_outputs = tf.scan(
+        states = tf.scan(
             fn=fn,
             elems=seq,
             initializer=init_state
         )
 
         if output_widgets is None:
-            states = ops.transpose_sequence(states_outputs, name='states')
+            states = ops.transpose_sequence(states, name='states')
             return states
         else:
-            states = ops.transpose_sequence(states_outputs[0], name='states')
-            outputs = ops.transpose_sequence(states_outputs[1], name='outputs')
+            outputs = tf.map_fn(
+                fn=lambda elem: setup(elem, output_widgets),
+                elems=states
+            )
+            states = ops.transpose_sequence(states, name='states')
+            outputs = ops.transpose_sequence(outputs, name='outputs')
             return states, outputs
 
     def setup_recursive(self,
