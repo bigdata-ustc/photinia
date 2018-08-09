@@ -2,7 +2,7 @@
 
 
 """
-@author: zhukun, xi
+@author: zhkun, xi
 @since: 2018-07-13
 
 
@@ -200,8 +200,8 @@ class VGG16(ph.Widget):
     def fc8(self):
         return self._fc8
 
-    def _setup(self, x, name=None):
-        y = ph.setup(
+    def _setup(self, x, name='out'):
+        return ph.setup(
             x - self._mean,
             [self._conv1_1, (tf.nn.relu, 'map1_1'),  # 1
              self._conv1_2, (tf.nn.relu, 'map1_2'), self._pool1,  # 2
@@ -221,7 +221,6 @@ class VGG16(ph.Widget):
              self._fc7, (tf.nn.relu, 'h7'),  # 15
              self._fc8, (tf.nn.softmax, name)]  # 16
         )
-        return y
 
     def load_parameters(self, model_file):
         ph.io.load_model_from_file(self, model_file, 'vgg16')
