@@ -112,6 +112,34 @@ def save_mat(fn_or_fp, mat):
     save_array(fn_or_fp, array)
 
 
+def resize_keep_ratio(image, height, width, padding_color=None):
+    """Resize an image and keep the height-width ratio.
+
+    Args:
+        image: OpenCV image or numpy array.
+        height (int): New height.
+        width (int): New width.
+        padding_color (tuple[int]): Color used to fill the padding areas.
+
+    Returns:
+        OpenCV image or numpy array.
+
+    """
+    src_height = image.shape[0]
+    src_width = image.shape[1]
+    src_ratio = src_height / src_width
+    ratio = height / width
+    if ratio < src_ratio:
+        b = int((src_height / ratio - src_width) / 2)
+        image = cv.copyMakeBorder(image, 0, 0, b, b, cv.BORDER_CONSTANT, value=padding_color)
+    elif ratio > src_ratio:
+        # print(src_ratio, ratio)
+        b = int((src_width * ratio - src_height) / 2)
+        image = cv.copyMakeBorder(image, b, b, 0, 0, cv.BORDER_CONSTANT, value=padding_color)
+    image = cv.resize(image, (width, height))
+    return image
+
+
 def _trans_mat_offset_center(mat, x, y):
     o_x = float(x) / 2 + 0.5
     o_y = float(y) / 2 + 0.5
