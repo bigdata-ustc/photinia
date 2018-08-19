@@ -13,7 +13,10 @@ from . import context
 from . import widgets
 
 
-class Slot(object):
+class Step(object):
+    """Train step.
+    Trainable is trained and tested step by step~
+    """
 
     def __init__(self,
                  inputs=None,
@@ -175,7 +178,7 @@ class Model(widgets.Trainable):
             raise ValueError(
                 'Invalid slot name %s. Cannot be the same as any of the method name of the trainer.' % name
             )
-        slot = Slot(
+        slot = Step(
             inputs=inputs,
             outputs=outputs,
             updates=updates,
@@ -192,7 +195,7 @@ class Model(widgets.Trainable):
             name (str): Slot name.
 
         Returns:
-            Slot: The slot object.
+            Step: The slot object.
 
         """
         if name not in self._slots:

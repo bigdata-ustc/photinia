@@ -83,7 +83,7 @@ def call_for_batch(context, slot, data_source):
 
     Args:
         context (dict):
-        slot (photinia.Slot):
+        slot (photinia.Step):
         data_source (photinia.BatchSource):
 
     Returns:
@@ -113,7 +113,7 @@ def call_for_all(context, slot, data_source):
 
     Args:
         context (dict):
-        slot (photinia.Slot):
+        slot (photinia.Step):
         data_source (photinia.BatchSource):
 
     Returns:
