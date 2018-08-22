@@ -26,7 +26,8 @@ class Agent(ddpg.DDPGAgent):
             deep_rl.MLPCritic('target_critic', state_size, action_size, hidden_size * 2),
             ph.placeholder('source_state', (None, state_size)),
             ph.placeholder('target_state', (None, state_size)),
-            ph.placeholder('reward', (None,))
+            ph.placeholder('reward', (None,)),
+            replay_size=1000
         )
 
 
@@ -67,7 +68,7 @@ def main(args):
 if __name__ == '__main__':
     _parser = argparse.ArgumentParser()
     _parser.add_argument('-g', '--gpu', default='0', help='Choose which GPU to use.')
-    _parser.add_argument('-b', '--batch-size', type=int, default=32)
+    _parser.add_argument('-b', '--batch-size', type=int, default=256)
     _parser.add_argument('-n', '--num-loops', type=int, default=150)
     _args = _parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = _args.gpu

@@ -55,47 +55,48 @@ class DDPGAgent(ph.Model):
         super(DDPGAgent, self).__init__(name)
 
     def _build(self):
-        source_actor = self._source_actor
-        target_actor = self._target_actor
-        source_critic = self._source_critic
-        target_critic = self._target_critic
+        actor_source = self._source_actor
+        actor_target = self._target_actor
+        critic_source = self._source_critic
+        critic_target = self._target_critic
 
-        source_state = self._source_state_placeholder
-        target_state = self._target_state_placeholder
-        reward = self._reward_placeholder
+        state_source = self._source_state_placeholder
+        action_source = actor_source.setup(state_source)
+        reward_source = critic_source.setup(state_source, action_source)
 
-        source_action = source_actor.setup(source_state)
+        state_target = self._target_state_placeholder
+        action_target = actor_target.setup(state_target)
+        reward_target = critic_target.setup(state_target, action_target)
+
         self._add_slot(
             '_predict',
-            inputs=source_state,
-            outputs=source_action
+            inputs=state_source,
+            outputs=action_source
         )
 
-        target_action = target_actor.setup(target_state)
-        target_reward = target_critic.setup(target_state, target_action)
-        y = reward + self._gamma * target_reward
-        source_reward = source_critic.setup(source_state, source_action)
-        loss = tf.reduce_mean(tf.square(y - source_reward))
-        var_list = source_critic.get_trainable_variables()
+        reward = self._reward_placeholder
+        y = reward + self._gamma * reward_target
+        critic_loss = tf.reduce_mean(tf.square(y - reward_source))
+        var_list = critic_source.get_trainable_variables()
         reg = ph.reg.Regularizer().add_l1_l2(var_list)
         self._add_slot(
             '_update_q_source',
-            inputs=(source_state, source_action, reward, target_state),
-            outputs=loss,
+            inputs=(state_source, action_source, reward, state_target),
+            outputs=critic_loss,
             updates=tf.train.RMSPropOptimizer(1e-4, 0.9, 0.9).minimize(
-                loss + reg.get_loss(1e-5),
+                critic_loss + reg.get_loss(1e-5),
                 var_list=var_list
             )
         )
 
-        var_list = source_actor.get_trainable_variables()
-        loss = tf.reduce_mean(source_reward)
+        var_list = actor_source.get_trainable_variables()
+        actor_loss = -tf.reduce_mean(reward_source)
         reg = ph.reg.Regularizer().add_l1_l2(var_list)
         self._add_slot(
             '_update_a_source',
-            inputs=source_state,
+            inputs=state_source,
             updates=tf.train.RMSPropOptimizer(1e-4, 0.9, 0.9).minimize(
-                -loss + reg.get_loss(1e-5),
+                actor_loss + reg.get_loss(1e-5),
                 var_list=var_list
             )
         )
@@ -105,8 +106,8 @@ class DDPGAgent(ph.Model):
             updates=tf.group(*[
                 tf.assign(v_target, self._tao * v_source + (1.0 - self._tao) * v_target)
                 for v_source, v_target in zip(
-                    source_critic.get_trainable_variables(),
-                    target_critic.get_trainable_variables()
+                    critic_source.get_trainable_variables(),
+                    critic_target.get_trainable_variables()
                 )
             ])
         )
@@ -116,8 +117,8 @@ class DDPGAgent(ph.Model):
             updates=tf.group(*[
                 tf.assign(v_target, self._tao * v_source + (1.0 - self._tao) * v_target)
                 for v_source, v_target in zip(
-                    source_actor.get_trainable_variables(),
-                    target_actor.get_trainable_variables()
+                    actor_source.get_trainable_variables(),
+                    actor_target.get_trainable_variables()
                 )
             ])
         )
@@ -127,8 +128,8 @@ class DDPGAgent(ph.Model):
             updates=tf.group(*[
                 tf.assign(v_target, v_source)
                 for v_source, v_target in zip(
-                    source_critic.get_trainable_variables(),
-                    target_critic.get_trainable_variables()
+                    critic_source.get_trainable_variables(),
+                    critic_target.get_trainable_variables()
                 )
             ])
         )
@@ -137,8 +138,8 @@ class DDPGAgent(ph.Model):
             updates=tf.group(*[
                 tf.assign(v_target, v_source)
                 for v_source, v_target in zip(
-                    source_actor.get_trainable_variables(),
-                    target_actor.get_trainable_variables()
+                    actor_source.get_trainable_variables(),
+                    actor_target.get_trainable_variables()
                 )
             ])
         )

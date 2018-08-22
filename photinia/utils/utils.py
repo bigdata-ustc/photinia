@@ -76,9 +76,7 @@ def print_progress(current_loop,
     :param interval: Interval loops. Default is 1000.
     """
     if current_loop % interval == 0 or current_loop == num_loops:
-        print('%s [%d/%d]... %.2f%%' % (msg, current_loop, num_loops, current_loop / num_loops * 100), end='\r')
-    if current_loop == num_loops:
-        print()
+        print('%s [%d/%d]... %.2f%%' % (msg, current_loop, num_loops, current_loop / num_loops * 100))
 
 
 def read_variables(var_or_list):
