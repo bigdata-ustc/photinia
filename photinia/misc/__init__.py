@@ -5,4 +5,3 @@
 @since: 2017-12-19
 """
 
-from . import seqae
