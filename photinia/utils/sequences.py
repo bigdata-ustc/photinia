@@ -13,48 +13,50 @@ import photinia as ph
 
 
 class Vocabulary(object):
+    """Vocabulary
+    """
+
     EOS = ''
 
-    def __init__(self, add_eos=False):
+    def __init__(self, add_eos=True):
         self._add_eos = add_eos
         self._word_dict = dict()
         self._index_dict = dict()
+
+        self._word_dict[self.EOS] = 0
+        self._index_dict[0] = self.EOS
         self._voc_size = 0
 
-    def load(self, data_source, word_field='word', index_field='index'):
+    def load(self, iterable, word_field, index_field):
         """Load an existing vocabulary.
 
         Args:
-            data_source (photinia.io.DataSource): Input data source.
+            iterable: Iterable object. This can be a list, a generator or a database cursor.
             word_field (str): Column name that contains the word.
             index_field (str): Column name that contains the word index.
 
         """
-        meta = data_source.meta()
-        word_index = meta.index(word_field)
-        index_index = meta.index(index_field)
         self._word_dict = {
-            row[word_index]: row[index_index]
-            for row in data_source
+            doc[word_field]: doc[index_field]
+            for doc in iterable
         }
         self._index_dict = {
             index: word
             for word, index in self._word_dict.items()
         }
-        self._voc_size = len(self._word_dict) + (1 if self._add_eos else 0)
+        self._voc_size = len(self._word_dict)
+        return self
 
-    def generate(self, data_source, words_field):
+    def generate(self, iterable, words_field):
         """Generate a vocabulary from sentences.
 
         Args:
-            data_source (photinia.io.DataSource): Input data source.
+            iterable: Iterable object. This can be a list, a generator or a database cursor.
             words_field (str): Column name that contains "words" data.
 
         """
-        meta = data_source.meta()
-        words_index = meta.index(words_field)
-        for row in data_source:
-            words = row[words_index]
+        for doc in iterable:
+            words = doc[words_field]
             for word in words:
                 if word not in self._word_dict:
                     self._word_dict[word] = len(self._word_dict)
@@ -62,7 +64,8 @@ class Vocabulary(object):
             index: word
             for word, index in self._word_dict.items()
         }
-        self._voc_size = len(self._word_dict) + (1 if self._add_eos else 0)
+        self._voc_size = len(self._word_dict)
+        return self
 
     @property
     def voc_size(self):
@@ -77,11 +80,6 @@ class Vocabulary(object):
         return self._index_dict
 
     def word_to_one_hot(self, word):
-        if word == self.EOS:
-            if self._add_eos:
-                return ph.utils.one_hot(self._voc_size - 1, self._voc_size, np.float32)
-            else:
-                raise ValueError('The vocabulary was not initialized with supporting <EOS>')
         return ph.utils.one_hot(self._word_dict[word], self._voc_size, np.float32)
 
     def one_hot_to_word(self, one_hot):
@@ -89,13 +87,7 @@ class Vocabulary(object):
         try:
             return self._index_dict[index]
         except KeyError:
-            if index == self._voc_size - 1:
-                if self._add_eos:
-                    return self.EOS
-                else:
-                    raise ValueError('The vocabulary was not initialized with supporting <EOS>')
-            else:
-                raise ValueError('Index %d is not in vocabulary.' % index)
+            raise ValueError('Index %d is not in vocabulary.' % index)
 
     def words_to_one_hots(self, words):
         one_hot_list = [
@@ -103,7 +95,7 @@ class Vocabulary(object):
             for word in words
         ]
         if self._add_eos:
-            one_hot_list.append(ph.utils.one_hot(self._voc_size - 1, self._voc_size, np.float32))
+            one_hot_list.append(ph.utils.one_hot(0, self._voc_size, np.float32))
         return one_hot_list
 
     def one_hots_to_words(self, one_hots):
@@ -112,15 +104,11 @@ class Vocabulary(object):
                 index = np.argmax(one_hot)
                 try:
                     word = self._index_dict[index]
+                    if word == '':
+                        break
                     buffer.write(word)
                 except KeyError:
-                    if index == self._voc_size - 1:
-                        if self._add_eos:
-                            break
-                        else:
-                            raise ValueError('The vocabulary was not initialized with supporting <EOS>')
-                    else:
-                        raise ValueError('Index %d is not in vocabulary.' % index)
+                    raise ValueError('Index %d is not in vocabulary.' % index)
             return buffer.getvalue()
 
 
