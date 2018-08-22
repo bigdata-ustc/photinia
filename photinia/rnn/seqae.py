@@ -83,15 +83,18 @@ class Decoder(ph.Widget):
         if self._emb_layer is None:
             self._emb_layer = ph.Linear('emb_layer', self._voc_size, self._emb_size)
         else:
-            self._emb_size = self._emb_layer.emb_size
+            self._emb_size = self._emb_layer.output_size
         self._cell = ph.GRUCell('cell', self._emb_size, self._state_size)
         self._out_layer = ph.Linear('out_layer', self._state_size, self._voc_size)
 
     def _setup(self, h, max_len, activation=ph.ops.lrelu):
+        batch_size = tf.shape(h)[0]
+        init_input = tf.zeros(shape=(batch_size, self._voc_size), dtype=ph.dtype)
         _, outputs = self._cell.setup_recursive(
             max_len,
+            init_input,
             input_widgets=[self._emb_layer, activation],
-            output_widgets=[self._out_layer, activation, tf.nn.softmax],
+            output_widgets=[self._out_layer, tf.nn.softmax],
             init_state=h
         )
         return outputs
@@ -137,7 +140,7 @@ class Model(ph.Model):
             self._voc_size,
             self._emb_size,
             self._state_size,
-            self._encoder.emb_layer
+            encoder.emb_layer
         )
         self._encoder = encoder
         self._decoder = decoder
@@ -150,25 +153,22 @@ class Model(ph.Model):
         self._h = h
         self._seq_ = seq_
 
-        loss = -(
-                seq * ph.ops.log(1 - seq_) +
-                (1 - seq) * ph.ops.log(seq_)
-        )
-        loss = tf.reduce_mean(loss)
+        loss = -ph.ops.log(tf.reduce_sum(seq * seq_, axis=2))  # (batch_size, seq_length)
+        seq_len = ph.ops.sequence_length(seq)
+        mask = tf.sequence_mask(seq_len, dtype=ph.dtype)  # (batch_size, seq_length)
+        loss = tf.reduce_mean(loss * mask)
         self._loss = loss
 
         reg = ph.reg.Regularizer()
         reg.add_l1_l2(self.get_trainable_variables())
 
         update = self._optimizer.minimize(loss + reg.get_loss(self._reg) if self._reg > 0 else loss)
-        self._add_slot(
-            'train',
+        self.train = ph.Step(
             inputs=seq,
             outputs={'seq_': seq_, 'loss': loss},
             updates=update
         )
-        self._add_slot(
-            'predict',
+        self.test = ph.Step(
             inputs=seq,
             outputs={'h': h, 'seq_': seq_, 'loss': loss}
         )

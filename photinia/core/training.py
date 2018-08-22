@@ -141,9 +141,9 @@ class Model(widgets.Trainable):
         Abstract method.
         All subclass must implement this method.
 
-        There are at least two tasks to be done in this method:
-        1) Construct the model's graph structure with TF.
-        2) Define and add slots for training, evaluation and prediction.
+        This method is used to define placeholders, variables and widgets.
+        We need to define them before setting them up since
+        we want placeholders, variables and widgets can be easily customized in the subclass.
 
         """
         raise NotImplementedError()

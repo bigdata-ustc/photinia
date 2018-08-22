@@ -84,9 +84,9 @@ class Trainable(object):
         """
         if name is not None:
             if not isinstance(name, str):
-                raise ValueError('Widget name must be specified with string.')
+                raise ValueError('Trainable name must be specified with string.')
             if len(name.strip()) != len(name) or name == '':
-                raise ValueError('Widget name cannot be empty or contain space characters.')
+                raise ValueError('Trainable name cannot be empty or contain space characters.')
         self._name = name
         self._scope = ''
         self._full_name = None
@@ -128,12 +128,14 @@ class Trainable(object):
             else:
                 self._full_name = '%s/%s' % (self._scope, self._name)
         self._prefix = self._full_name + '/'
+
         with tf.variable_scope(self._name):
             self._build()
             self._built = True
+
         with self.LOCK:
             if self._full_name in self.INSTANCES:
-                raise ValueError('Duplicated widget name %s.' % self._full_name)
+                raise ValueError('Duplicated trainable name %s.' % self._full_name)
             self.INSTANCES[self._full_name] = self
         return self
 
@@ -1102,7 +1104,7 @@ class GRUCell(Widget):
                  with_bias=False,
                  activation=tf.nn.tanh,
                  w_init=init.TruncatedNormal(0, 1e-3),
-                 u_init=init.TruncatedNormal(0, 1e-3),
+                 u_init=init.Orthogonal(),
                  b_init=init.Zeros()):
         """Construct a cell.
         Does not create the parameters' tensors.
@@ -1330,17 +1332,17 @@ class GRUCell(Widget):
 
     def setup_recursive(self,
                         max_len,
+                        init_input,
                         input_widgets=None,
                         output_widgets=None,
-                        init_state=None,
-                        init_input=None):
+                        init_state=None):
         """Setup the cell as a RNN in a recursive manner.
 
         :param max_len: Max length. (int or Tensor)
+        :param init_input: Initial input.
         :param input_widgets: Widgets to setup before input to cell.
         :param output_widgets: Widgets to setup after cell state.
         :param init_state: Initial state.
-        :param init_input: Initial input.
         :return: States and outputs.
         """
         if init_state is None and init_input is None:
@@ -1352,13 +1354,6 @@ class GRUCell(Widget):
                 shape=(batch_size, self.state_size),
                 dtype=conf.dtype,
                 name='init_state'
-            )
-        if init_input is None:
-            batch_size = tf.shape(init_state)[0]
-            init_input = tf.zeros(
-                shape=(batch_size, self._input_size),
-                dtype=conf.dtype,
-                name='init_input'
             )
 
         def fn_recursive(acc, _):
