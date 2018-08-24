@@ -27,7 +27,7 @@ class Agent(ddpg.DDPGAgent):
             deep_rl.MLPActor('target_actor', state_size, action_size, hidden_size),
             deep_rl.MLPCritic('source_critic', state_size, action_size, hidden_size * 2),
             deep_rl.MLPCritic('target_critic', state_size, action_size, hidden_size * 2),
-            replay_size=1000
+            replay_size=10000
         )
 
 
@@ -69,8 +69,8 @@ def main(args):
 if __name__ == '__main__':
     _parser = argparse.ArgumentParser()
     _parser.add_argument('-g', '--gpu', default='0', help='Choose which GPU to use.')
-    _parser.add_argument('-b', '--batch-size', type=int, default=256)
-    _parser.add_argument('-n', '--num-loops', type=int, default=150)
+    _parser.add_argument('-b', '--batch-size', type=int, default=64)
+    _parser.add_argument('-n', '--num-loops', type=int, default=200)
     _args = _parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = _args.gpu
     exit(main(_args))

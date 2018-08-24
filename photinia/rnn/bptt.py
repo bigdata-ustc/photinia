@@ -16,19 +16,32 @@ class BPTT(ph.Model):
     def __init__(self,
                  name,
                  input_list,
-                 prev_state,
+                 input_prev_state,
                  state,
                  var_list,
                  optimizer=tf.train.RMSPropOptimizer(1e-5, 0.9, 0.9),
                  max_replay=None):
+        """Back Propagation Through Time (BPTT)
+
+        Args:
+            name (str): Model name.
+            input_list (list|tuple): The inputs of the RNN.
+            input_prev_state: Input for the previous state of the RNN.
+            state: The output state of the RNN.
+            var_list (list|tuple): The parameters(variables) that want to train.
+                This usually set as cell.get_trainable_variables().
+            optimizer: The optimizer used to train the parameters.
+            max_replay (int): The max length of the activation history.
+
+        """
         self._input_list = input_list
-        self._prev_state = prev_state
+        self._prev_state = input_prev_state
         self._state = state
         self._var_list = var_list
         self._optimizer = optimizer
         self._max_replay = max_replay
 
-        self._state_size = prev_state.shape[1]
+        self._state_size = input_prev_state.shape[1]
         self._replay = list()
         super(BPTT, self).__init__(name)
 
