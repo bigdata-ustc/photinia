@@ -93,7 +93,11 @@ class Decoder(ph.Widget):
         _, outputs = self._cell.setup_recursive(
             max_len,
             init_input,
-            input_widgets=[self._emb_layer, activation],
+            input_widgets=[
+                lambda a: tf.one_hot(tf.argmax(a, 1), self._voc_size),
+                self._emb_layer,
+                activation
+            ],
             output_widgets=[self._out_layer, tf.nn.softmax],
             init_state=h
         )
@@ -153,10 +157,10 @@ class Model(ph.Model):
         self._h = h
         self._seq_ = seq_
 
-        loss = -ph.ops.log(tf.reduce_sum(seq * seq_, axis=2))  # (batch_size, seq_length)
+        loss = ph.ops.neg_log_likelihood(seq, seq_, reduce=False)  # (batch_size, seq_length)
         seq_len = ph.ops.sequence_length(seq)
         mask = tf.sequence_mask(seq_len, dtype=ph.dtype)  # (batch_size, seq_length)
-        loss = tf.reduce_mean(loss * mask)
+        loss = ph.ops.reduce_loss_to_scalar(loss * mask)
         self._loss = loss
 
         reg = ph.reg.Regularizer()

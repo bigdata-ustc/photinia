@@ -7,7 +7,7 @@
 
 import tensorflow as tf
 
-from . import conf
+from .. import conf
 
 
 def log(x, eps=1e-7, name=None):
