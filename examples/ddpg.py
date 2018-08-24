@@ -20,13 +20,13 @@ class Agent(ddpg.DDPGAgent):
     def __init__(self, name, state_size, action_size, hidden_size=50):
         super(Agent, self).__init__(
             name,
+            ph.placeholder('source_state', (None, state_size)),
+            ph.placeholder('target_state', (None, state_size)),
+            ph.placeholder('reward', (None,)),
             deep_rl.MLPActor('source_actor', state_size, action_size, hidden_size),
             deep_rl.MLPActor('target_actor', state_size, action_size, hidden_size),
             deep_rl.MLPCritic('source_critic', state_size, action_size, hidden_size * 2),
             deep_rl.MLPCritic('target_critic', state_size, action_size, hidden_size * 2),
-            ph.placeholder('source_state', (None, state_size)),
-            ph.placeholder('target_state', (None, state_size)),
-            ph.placeholder('reward', (None,)),
             replay_size=1000
         )
 
@@ -46,7 +46,8 @@ def main(args):
             if render:
                 env.render()
 
-            a = model.predict(s) * env.action_space.high
+            a, = model.predict([s])[0]
+            a *= env.action_space.high
             a = env_noise.add_noise(a)
             env_noise.discount()
 
