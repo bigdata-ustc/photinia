@@ -6,4 +6,4 @@
 """
 
 from .common import *
-from .loss import *
+from .losses import *

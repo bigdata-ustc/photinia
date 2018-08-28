@@ -160,7 +160,7 @@ class Model(ph.Model):
         loss = ph.ops.neg_log_likelihood(seq, seq_, reduce=False)  # (batch_size, seq_length)
         seq_len = ph.ops.sequence_length(seq)
         mask = tf.sequence_mask(seq_len, dtype=ph.dtype)  # (batch_size, seq_length)
-        loss = ph.ops.reduce_loss_to_scalar(loss * mask)
+        loss = ph.ops.reduce_sum_loss(loss * mask)
         self._loss = loss
 
         reg = ph.reg.Regularizer()
