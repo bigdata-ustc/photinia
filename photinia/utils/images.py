@@ -12,13 +12,14 @@ import numpy as np
 import scipy.ndimage as ndi
 
 
-def load_as_array(file_or_bytes, size=None):
+def load_as_array(file_or_bytes, size=None, force_bgr_channels=True):
     """Load an image from file and convert it into array.
     The data type of the array is np.uint8.
 
     Args:
         file_or_bytes: File name, bytes.
         size (tuple[int]): The loaded image size (height, width).
+        force_bgr_channels (bool): Force the output to have 3 channels.
 
     Returns:
         numpy.ndarray: np.uint8 ndarray represent the image.
@@ -36,6 +37,16 @@ def load_as_array(file_or_bytes, size=None):
         image = cv.imread(file_or_bytes)
     if size is not None:
         image = cv.resize(image, size)
+    if force_bgr_channels:
+        shape = image.shape
+        order = len(shape)
+        if not (order == 3 and shape[2] == 3):
+            if order == 2:
+                image = np.reshape(image, (*shape, 1))
+                shape = image.shape
+            if shape[2] != 1:
+                raise ValueError('Invalid image shape', str(shape))
+            image = np.repeat(image, 3, 2)
     return np.asarray(image, np.uint8)
 
 
@@ -72,7 +83,7 @@ def mat_to_array(mat):
     return (mat * 128.0 + 127.75).astype(np.uint8)
 
 
-def load_as_mat(file_or_bytes, size=None):
+def load_as_mat(file_or_bytes, size=None, force_bgr_channels=True):
     """Load an image from file and convert it into matrix.
     The data type of the array is np.float32.
     Elements in the matrix must be valued in range -1 ~ 1.
@@ -80,6 +91,7 @@ def load_as_mat(file_or_bytes, size=None):
     Args:
         file_or_bytes: File name or bytes.
         size (tuple[int]): The loaded image size (height, width).
+        force_bgr_channels (bool): Force the output to have 3 channels.
 
     Returns:
         numpy.ndarray: np.float32 ndarray represent the image.
@@ -97,6 +109,16 @@ def load_as_mat(file_or_bytes, size=None):
         image = cv.imread(file_or_bytes)
     if size is not None:
         image = cv.resize(image, size)
+    if force_bgr_channels:
+        shape = image.shape
+        order = len(shape)
+        if not (order == 3 and shape[2] == 3):
+            if order == 2:
+                image = np.reshape(image, (*shape, 1))
+                shape = image.shape
+            if shape[2] != 1:
+                raise ValueError('Invalid image shape', str(shape))
+            image = np.repeat(image, 3, 2)
     return (np.asarray(image, dtype=np.float32) - 128.0) / 128.0
 
 
