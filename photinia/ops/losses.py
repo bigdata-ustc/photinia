@@ -16,16 +16,15 @@ def reduce_sum_loss(loss):
     return loss
 
 
-def mse(target, output, reduce=True):
+def mean_square_error(target, output, reduce=True):
     loss = tf.square(target - output)
     if reduce:
         return reduce_sum_loss(loss)
     return loss
 
 
-def neg_log_likelihood(target, output, axis=-1, eps=1e-6, reduce=True):
-    loss = tf.reduce_sum(target * output, axis=axis)
-    loss = -tf.log(loss + eps)
+def log_likelihood(target, output, axis=-1, eps=1e-6, reduce=True):
+    loss = tf.log(tf.reduce_sum(target * output, axis=axis) + eps)
     if reduce:
         return reduce_sum_loss(loss)
     return loss
