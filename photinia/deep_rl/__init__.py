@@ -7,4 +7,5 @@
 
 from .common import *
 
+from . import actors_critics
 from . import ddpg
