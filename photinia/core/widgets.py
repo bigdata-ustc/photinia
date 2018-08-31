@@ -1383,7 +1383,7 @@ class LSTMCell(Widget):
                  with_bias=True,
                  activation=tf.nn.tanh,
                  w_init=init.TruncatedNormal(0, 1e-3),
-                 u_init=init.TruncatedNormal(0, 1e-3),
+                 u_init=init.Orthogonal(),
                  b_init=init.Zeros()):
         """LSTM cell.
 
