@@ -18,10 +18,14 @@ class MLPActor(ph.Widget):
                  name,
                  state_size,
                  action_size,
-                 hidden_size):
+                 hidden_size,
+                 w_init=ph.init.TruncatedNormal(stddev=1e-4),
+                 b_init=ph.init.Zeros()):
         self._state_size = state_size
         self._action_size = action_size
         self._hidden_size = hidden_size
+        self._w_init = w_init
+        self._b_init = b_init
         super(MLPActor, self).__init__(name)
 
     def _build(self):
@@ -30,6 +34,8 @@ class MLPActor(ph.Widget):
             self._state_size,
             self._action_size,
             self._hidden_size,
+            w_init=self._w_init,
+            b_init=self._b_init
         )
 
     def _setup(self, input_state, name='action'):
@@ -44,10 +50,14 @@ class MLPCritic(ph.Widget):
                  name,
                  state_size,
                  action_size,
-                 hidden_size):
+                 hidden_size,
+                 w_init=ph.init.TruncatedNormal(stddev=1e-4),
+                 b_init=ph.init.Zeros()):
         self._state_size = state_size
         self._action_size = action_size
         self._hidden_size = hidden_size
+        self._w_init = w_init
+        self._b_init = b_init
         super(MLPCritic, self).__init__(name)
 
     def _build(self):
@@ -56,6 +66,8 @@ class MLPCritic(ph.Widget):
             self._state_size + self._action_size,
             1,
             self._hidden_size,
+            w_init=self._w_init,
+            b_init=self._b_init
         )
 
     def _setup(self, input_state, input_action, name='reward'):
@@ -72,11 +84,15 @@ class DeepResActor(ph.Widget):
                  state_size,
                  action_size,
                  hidden_size,
-                 num_layers=1):
+                 num_layers=1,
+                 w_init=ph.init.TruncatedNormal(stddev=1e-4),
+                 b_init=ph.init.Zeros()):
         self._state_size = state_size
         self._action_size = action_size
         self._hidden_size = hidden_size
         self._num_layers = num_layers
+        self._w_init = w_init
+        self._b_init = b_init
         super(DeepResActor, self).__init__(name)
 
     def _build(self):
@@ -85,7 +101,8 @@ class DeepResActor(ph.Widget):
             self._state_size,
             self._action_size,
             self._hidden_size,
-            self._num_layers
+            self._num_layers,
+            w_init=self._w_init
         )
 
     def _setup(self, input_state, name='action'):
@@ -101,11 +118,15 @@ class DeepResCritic(ph.Widget):
                  state_size,
                  action_size,
                  hidden_size,
-                 num_layers=1):
+                 num_layers=1,
+                 w_init=ph.init.TruncatedNormal(stddev=1e-4),
+                 b_init=ph.init.Zeros()):
         self._state_size = state_size
         self._action_size = action_size
         self._hidden_size = hidden_size
         self._num_layers = num_layers
+        self._w_init = w_init
+        self._b_init = b_init
         super(DeepResCritic, self).__init__(name)
 
     def _build(self):
@@ -114,7 +135,9 @@ class DeepResCritic(ph.Widget):
             input_size=self._state_size + self._action_size,
             output_size=1,
             hidden_size=self._hidden_size,
-            num_layers=self._num_layers
+            num_layers=self._num_layers,
+            w_init=self._w_init,
+            b_init=self._b_init
         )
 
     def _setup(self, input_state, input_action, name='reward'):
