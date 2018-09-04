@@ -46,7 +46,7 @@ class BPTT(ph.Model):
         super(BPTT, self).__init__(name)
 
     def _build(self):
-        self._get_state = ph.Step(
+        self._step_get_state = ph.Step(
             inputs=(*self._input_list, self._prev_state),
             outputs=self._state
         )
@@ -69,11 +69,11 @@ class BPTT(ph.Model):
             )
             for grad_zero in grad_zeros_list
         ]
-        self._reset_grad = ph.Step(
-            updates=[
+        self._step_reset_grad = ph.Step(
+            updates=tf.group(*[
                 tf.assign(grad, value)
                 for grad, value in zip(self._grad_acc_list, grad_zeros_list)
-            ]
+            ])
         )
 
         #
@@ -86,25 +86,25 @@ class BPTT(ph.Model):
         grad_weight = ph.placeholder('grad_weight', ())
         grad_list = tf.gradients(self._state, self._var_list, grad_state)
         grad_prev_state = tf.gradients(self._state, [self._prev_state], grad_state)[0]
-        self._update_grad = ph.Step(
+        self._step_update_grad = ph.Step(
             inputs=(*self._input_list, self._prev_state, grad_state, grad_weight),
             outputs=(grad_prev_state, tf.reduce_sum(tf.abs(grad_prev_state))),
-            updates=[
+            updates=tf.group(*[
                 tf.assign_add(grad_acc, grad * grad_weight)
                 for grad_acc, grad in zip(self._grad_acc_list, grad_list)
-            ]
+            ])
         )
 
         #
         # apply gradient
-        self._apply_grad = ph.Step(
+        self._step_apply_grad = ph.Step(
             updates=self._optimizer.apply_gradients(
                 zip(self._grad_acc_list, self._var_list)
             )
         )
 
     def reset(self):
-        self._reset_grad()
+        self._step_reset_grad()
         self._replay.clear()
 
     def get_state(self, input_list, prev_state=None):
@@ -115,15 +115,15 @@ class BPTT(ph.Model):
         if self._max_replay is not None:
             if len(self._replay) > self._max_replay:
                 self._replay.pop(0)
-        return self._get_state(*input_list, prev_state)
+        return self._step_get_state(*input_list, prev_state)
 
     def update_gradients(self, grad_state, t=-1, weight=1.0):
         input_list, prev_state = self._replay[t]
-        grad_state, a = self._update_grad(*input_list, prev_state, grad_state, weight)
+        grad_state, a = self._step_update_grad(*input_list, prev_state, grad_state, weight)
         for input_list, prev_state in reversed(self._replay[:t]):
-            grad_state, a = self._update_grad(*input_list, prev_state, grad_state, weight)
+            grad_state, a = self._step_update_grad(*input_list, prev_state, grad_state, weight)
 
     def apply_gradients(self, reset=True):
-        self._apply_grad()
+        self._step_apply_grad()
         if reset:
             self.reset()
