@@ -5,6 +5,7 @@
 @since: 2018-06-20
 """
 
-from . import alexnet
 from . import dcae
+from . import alexnet
 from . import vgg16
+from . import vgg19
