@@ -14,6 +14,7 @@ import photinia as ph
 from photinia import deep_rl
 from photinia.deep_rl import actors_critics
 from photinia.deep_rl import ddpg
+import tensorflow as tf
 
 
 class Agent(ddpg.DDPGAgent):
@@ -28,11 +29,9 @@ class Agent(ddpg.DDPGAgent):
             actors_critics.DeepResActor('target_actor', state_size, action_size, hidden_size, 6),
             actors_critics.DeepResCritic('source_critic', state_size, action_size, hidden_size, 6),
             actors_critics.DeepResCritic('target_critic', state_size, action_size, hidden_size, 6),
-            # actors_critics.MLPActor('source_actor', state_size, action_size, hidden_size),
-            # actors_critics.MLPActor('target_actor', state_size, action_size, hidden_size),
-            # actors_critics.MLPCritic('source_critic', state_size, action_size, hidden_size * 2),
-            # actors_critics.MLPCritic('target_critic', state_size, action_size, hidden_size * 2),
-            replay_size=10000
+            gamma=0.9,
+            replay_size=1000,
+            optimizer=tf.train.RMSPropOptimizer(1e-4, 0.9, 0.9)
         )
 
 
@@ -43,7 +42,7 @@ def main(args):
 
     render = False
     env = gym.make('Pendulum-v0')
-    env_noise = deep_rl.NormalNoise(0.5)
+    env_noise = deep_rl.NormalNoise(1.0)
     for i in range(args.num_loops):
         total_r = 0
         s = env.reset()
@@ -54,12 +53,12 @@ def main(args):
             a, = model.predict([s])[0]
             a = env_noise.add_noise(a)
             a *= env.action_space.high
-            env_noise.discount(0.9999)
+            env_noise.discount(0.999)
 
             s_, r, done, info = env.step(a)
 
             model.feedback(s, a, r, s_)
-            model.train(args.batch_size)
+            model.train(args.batch_size * 4)
 
             total_r += r
             s = s_

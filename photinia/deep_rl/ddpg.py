@@ -26,7 +26,7 @@ class DDPGAgent(ph.Model):
                  tao=0.01,
                  replay_size=10000,
                  optimizer=tf.train.RMSPropOptimizer(1e-4, 0.9, 0.9),
-                 reg_weight=1e-5):
+                 reg=ph.reg.L1L2Regularizer(1e-5)):
         """DDPG agent.
 
         Args:
@@ -42,7 +42,7 @@ class DDPGAgent(ph.Model):
             tao (float):
             replay_size (int): Size of replay memory.
             optimizer: Optimizer to train this model.
-            reg_weight (float): Weight of the regularization term.
+            reg (ph.reg.Regularizer): Regularizer.
 
         """
         self._input_source_state = input_source_state
@@ -56,7 +56,7 @@ class DDPGAgent(ph.Model):
         self._tao = tao
         self._replay_size = replay_size
         self._optimizer = optimizer
-        self._reg_weight = reg_weight
+        self._reg = reg
 
         self._replay = common.ReplayMemory(replay_size)
         super(DDPGAgent, self).__init__(name)
@@ -92,22 +92,28 @@ class DDPGAgent(ph.Model):
         y = input_reward + self._gamma * target_reward
         critic_loss = tf.reduce_mean(tf.square(y - source_reward))
         var_list = source_critic.get_trainable_variables()
-        reg_loss = ph.reg.Regularizer().add_l1_l2(var_list).get_loss(self._reg_weight)
+        if self._reg is not None:
+            update = self._optimizer.minimize(critic_loss + self._reg.get_loss(), var_list=var_list)
+        else:
+            update = self._optimizer.minimize(critic_loss, var_list=var_list)
         self._step_train_critic = ph.Step(
             inputs=(input_source_state, source_action, input_reward, input_target_state),
             outputs=critic_loss,
-            updates=self._optimizer.minimize(critic_loss + reg_loss, var_list=var_list)
+            updates=update
         )
 
         #
         # train actor
         var_list = source_actor.get_trainable_variables()
         actor_loss = -tf.reduce_mean(source_reward)
-        reg_loss = ph.reg.Regularizer().add_l1_l2(var_list).get_loss(self._reg_weight)
+        if self._reg is not None:
+            update = self._optimizer.minimize(actor_loss + self._reg.get_loss(), var_list=var_list)
+        else:
+            update = self._optimizer.minimize(actor_loss, var_list=var_list)
         self._step_train_actor = ph.Step(
             inputs=input_source_state,
             outputs=actor_loss,
-            updates=self._optimizer.minimize(actor_loss + reg_loss, var_list=var_list)
+            updates=update
         )
 
         #
