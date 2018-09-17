@@ -4,7 +4,7 @@
 from setuptools import setup
 
 if __name__ == '__main__':
-    with open('README.rst') as file:
+    with open('README.md') as file:
         long_description = file.read()
     setup(
         name='photinia',
