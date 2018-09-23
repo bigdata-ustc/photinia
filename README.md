@@ -9,7 +9,7 @@ It can be regarded as some kind of "shortcut" to Tensorflow.
 We build this project, since we wish to have an easy, powerful and free toolset to
 do research on deep learning.
 
-## Dependencies
+# Dependencies
 
 * Python 3.6+
 * TensorFlow 1.2.0+
@@ -18,7 +18,7 @@ do research on deep learning.
 * pymongo
 * opencv-python
 
-## Installation
+# Installation
 
 The package can be installed directly from PyPI repository:
 ```bash
