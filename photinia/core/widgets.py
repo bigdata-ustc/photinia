@@ -6,6 +6,7 @@
 """
 
 import math
+import re
 import threading
 
 import numpy as np
@@ -66,6 +67,39 @@ def placeholder(name,
     return tf.placeholder(name=name, shape=shape, dtype=dtype)
 
 
+class _ContextManager(object):
+
+    def __init__(self):
+        self._stack = list()
+
+    def push(self, context_dict):
+        stack = self._stack
+        if len(stack) > 0:
+            top = dict(stack[-1])
+            context_dict = top.update(context_dict)
+        stack.append(context_dict)
+
+    def pop(self):
+        return self._stack.pop()
+
+    def top(self):
+        return self._stack[-1] if len(self._stack) > 0 else None
+
+
+class _DictContext(dict):
+
+    def __init__(self, context_manager):
+        self._context_manager = context_manager
+        super(_DictContext, self).__init__()
+
+    def __enter__(self):
+        self._context_manager.push(self)
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._context_manager.pop()
+
+
 class Trainable(object):
     """Trainable
     A trainable object contains TensorFlow Variables.
@@ -73,6 +107,8 @@ class Trainable(object):
 
     LOCK = threading.Semaphore(1)
     INSTANCES = dict()
+
+    reuse_context = _ContextManager()
 
     def __init__(self, name, build=True):
         """Construct a widget.
@@ -88,6 +124,7 @@ class Trainable(object):
             if len(name.strip()) != len(name) or name == '':
                 raise ValueError('Trainable name cannot be empty or contain space characters.')
         self._name = name
+
         self._scope = ''
         self._full_name = None
         self._prefix = None
@@ -149,6 +186,57 @@ class Trainable(object):
 
         """
         raise NotImplementedError()
+
+    def _variable(self,
+                  name,
+                  initializer,
+                  shape,
+                  dtype=conf.dtype,
+                  trainable=True,
+                  lookup=True):
+        """Create a variable.
+        Shortcut to "tf.Variable()".
+
+        Args:
+            name (str): Variable name.
+            initializer (init.Initializer): An initializer used to initial the variable.
+                Note that create an initializer does not create any Tensors on the graph.
+                To create a Tensor, initializer.build() should be called.
+            shape (tuple|list): Variable shape.
+            dtype: Data type.
+            trainable (bool): If `True`, the default, also adds the variable to the graph collection
+                `GraphKeys.TRAINABLE_VARIABLES`.
+            lookup (bool): Look up reuse_dict first?
+
+        Returns:
+            tf.Variable: The variable object.
+
+        """
+        var_ = self._variable_lookup(name) if lookup else None
+        return tf.Variable(
+            name=name,
+            initial_value=initializer.build(shape=shape, name='init_' + name),
+            dtype=dtype,
+            trainable=trainable
+        ) if var_ is None else var_
+
+    def _variable_lookup(self, name):
+        """Lookup existing variable from the given var_dict.
+
+        Args:
+            name (str): Relative variable name. (Not a full name or absolute path.)
+
+        Returns:
+            Tensor or Variable if the required variable exists in the var_dict.
+
+        """
+        reuse_dict = self.reuse_context.top()
+        if reuse_dict:
+            if name.rfind(':') == -1:
+                name += ':0'
+            full_name = self._prefix + name
+            return reuse_dict.get(full_name)
+        return None
 
     def get_variables(self):
         """Get variables(tensors) of the widget.
@@ -275,6 +363,38 @@ class Trainable(object):
 
     def __getitem__(self, name):
         return self.__getattr__(name)
+
+
+class ReuseContext(_DictContext):
+
+    def __init__(self, tensors=None, alias=None):
+        """Reuse dict.
+
+        Args:
+            tensors (dict): Name -> Tensor map.
+            alias (dict[str, str]): Alisa dict.
+
+        """
+        super(ReuseContext, self).__init__(Trainable.reuse_context)
+        if tensors:
+            self.add(tensors, alias)
+
+    def add(self, tensors, alias):
+        """
+
+        Args:
+            tensors (dict): Name -> Tensor map.
+            alias (dict[str, str]): Alisa dict.
+
+        """
+        alias = [
+            ('^' + old, new)
+            for old, new in alias.items()
+        ] if alias is not None else list()
+        for name, tensor in tensors.items():
+            for old, new in alias:
+                name = re.sub(old, new, name)
+            self[name] = tensor
 
 
 class Widget(Trainable):
@@ -434,20 +554,21 @@ class Linear(Widget):
         Two parameters: weight and bias.
 
         """
-        self._w = tf.Variable(
-            self._w_init.build(
-                shape=(self._input_size, self._output_size)
-            ),
+        self._w = self._variable(
+            name='w',
+            initializer=self._w_init,
+            shape=(self._input_size, self._output_size),
             dtype=conf.dtype,
-            name='w'
         )
-        self._b = tf.Variable(
-            self._b_init.build(
-                shape=(self._output_size,)
-            ),
-            dtype=conf.dtype,
-            name='b'
-        ) if self._with_bias else None
+        if self._with_bias:
+            self._b = self._variable(
+                name='b',
+                initializer=self._b_init,
+                shape=(self._output_size,),
+                dtype=conf.dtype
+            )
+        else:
+            self._b = None
 
     @property
     def w(self):
@@ -619,24 +740,22 @@ class Conv2D(Widget):
         return self._flat_size
 
     def _build(self):
-        self._w = tf.Variable(
-            self._w_init.build(
-                shape=(
-                    self._filter_height,
-                    self._filter_width,
-                    self._input_channels,
-                    self._output_channels
-                )
+        self._w = self._variable(
+            name='w',
+            initializer=self._w_init,
+            shape=(
+                self._filter_height,
+                self._filter_width,
+                self._input_channels,
+                self._output_channels
             ),
-            dtype=conf.dtype,
-            name='w'
+            dtype=conf.dtype
         )
-        self._b = tf.Variable(
-            self._b_init.build(
-                shape=(self._output_channels,)
-            ),
-            dtype=conf.dtype,
-            name='b'
+        self._b = self._variable(
+            name='b',
+            initializer=self._b_init,
+            shape=(self._output_channels,),
+            dtype=conf.dtype
         )
 
     @property
@@ -885,24 +1004,22 @@ class GroupConv2D(Widget):
         return self._flat_size
 
     def _build(self):
-        self._w = tf.Variable(
-            self._w_init.build(
-                shape=(
-                    self._filter_height,
-                    self._filter_width,
-                    math.floor(self._input_channels / self._num_groups),
-                    self._output_channels
-                )
+        self._w = self._variable(
+            name='w',
+            initializer=self._w_init,
+            shape=(
+                self._filter_height,
+                self._filter_width,
+                math.floor(self._input_channels / self._num_groups),
+                self._output_channels
             ),
-            dtype=conf.dtype,
-            name='w'
+            dtype=conf.dtype
         )
-        self._b = tf.Variable(
-            self._b_init.build(
-                shape=(self._output_channels,)
-            ),
-            dtype=conf.dtype,
-            name='b'
+        self._b = self._variable(
+            name='b',
+            initializer=self._b_init,
+            shape=(self._output_channels,),
+            dtype=conf.dtype
         )
 
     @property
@@ -1034,24 +1151,22 @@ class Conv2DTrans(Widget):
         return self._stride_width
 
     def _build(self):
-        self._w = tf.Variable(
-            self._w_init.build(
-                shape=(
-                    self._filter_height,
-                    self._filter_width,
-                    self._output_channels,
-                    self._input_channels
-                )
+        self._w = self._variable(
+            name='w',
+            initializer=self._w_init,
+            shape=(
+                self._filter_height,
+                self._filter_width,
+                self._output_channels,
+                self._input_channels
             ),
-            dtype=conf.dtype,
-            name='w'
+            dtype=conf.dtype
         )
-        self._b = tf.Variable(
-            self._b_init.build(
-                shape=(self._output_channels,)
-            ),
-            dtype=conf.dtype,
-            name='b'
+        self._b = self._variable(
+            name='b',
+            initializer=self._b_init,
+            shape=(self._output_channels,),
+            dtype=conf.dtype
         )
 
     @property
@@ -1147,70 +1262,61 @@ class GRUCell(Widget):
 
         :return: None
         """
-        self._wz = tf.Variable(
-            self._w_init.build(
-                shape=(self._input_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='wz'
+        self._wz = self._variable(
+            name='wz',
+            initializer=self._w_init,
+            shape=(self._input_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._wr = tf.Variable(
-            self._w_init.build(
-                shape=(self._input_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='wr'
+        self._wr = self._variable(
+            name='wr',
+            initializer=self._w_init,
+            shape=(self._input_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._wh = tf.Variable(
-            self._w_init.build(
-                shape=(self._input_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='wh'
+        self._wh = self._variable(
+            name='wh',
+            initializer=self._w_init,
+            shape=(self._input_size, self._state_size),
+            dtype=conf.dtype
         )
         #
-        self._uz = tf.Variable(
-            self._u_init.build(
-                shape=(self._state_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='uz'
+        self._uz = self._variable(
+            name='uz',
+            initializer=self._u_init,
+            shape=(self._state_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._ur = tf.Variable(
-            self._u_init.build(
-                shape=(self._state_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='ur'
+        self._ur = self._variable(
+            name='ur',
+            initializer=self._u_init,
+            shape=(self._state_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._uh = tf.Variable(
-            self._u_init.build(
-                shape=(self._state_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='uh'
+        self._uh = self._variable(
+            name='uh',
+            initializer=self._u_init,
+            shape=(self._state_size, self._state_size),
+            dtype=conf.dtype
         )
         if self._with_bias:
-            self._bz = tf.Variable(
-                self._b_init.build(
-                    shape=(self._state_size,)
-                ),
-                dtype=conf.dtype,
-                name='bz'
+            self._bz = self._variable(
+                name='bz',
+                initializer=self._b_init,
+                shape=(self._state_size,),
+                dtype=conf.dtype
             )
-            self._br = tf.Variable(
-                self._b_init.build(
-                    shape=(self._state_size,)
-                ),
-                dtype=conf.dtype,
-                name='br'
+            self._br = self._variable(
+                name='br',
+                initializer=self._b_init,
+                shape=(self._state_size,),
+                dtype=conf.dtype
             )
-            self._bh = tf.Variable(
-                self._b_init.build(
-                    shape=(self._state_size,)
-                ),
-                dtype=conf.dtype,
-                name='bh'
+            self._bh = self._variable(
+                name='bh',
+                initializer=self._b_init,
+                shape=(self._state_size,),
+                dtype=conf.dtype
             )
 
     @property
@@ -1428,92 +1534,80 @@ class LSTMCell(Widget):
         4) Activation parameters (wc, uc, bc).
 
         """
-        self._wi = tf.Variable(
-            self._w_init.build(
-                shape=(self._input_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='wi'
+        self._wi = self._variable(
+            name='wi',
+            initializer=self._w_init,
+            shape=(self._input_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._wf = tf.Variable(
-            self._w_init.build(
-                shape=(self._input_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='wf'
+        self._wf = self._variable(
+            name='wf',
+            initializer=self._w_init,
+            shape=(self._input_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._wo = tf.Variable(
-            self._w_init.build(
-                shape=(self._input_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='wo'
+        self._wo = self._variable(
+            name='wo',
+            initializer=self._w_init,
+            shape=(self._input_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._wc = tf.Variable(
-            self._w_init.build(
-                shape=(self._input_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='wc'
+        self._wc = self._variable(
+            name='wc',
+            initializer=self._w_init,
+            shape=(self._input_size, self._state_size),
+            dtype=conf.dtype
         )
         #
-        self._ui = tf.Variable(
-            self._u_init.build(
-                shape=(self._state_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='ui'
+        self._ui = self._variable(
+            name='ui',
+            initializer=self._u_init,
+            shape=(self._state_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._uf = tf.Variable(
-            self._u_init.build(
-                shape=(self._state_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='uf'
+        self._uf = self._variable(
+            name='uf',
+            initializer=self._u_init,
+            shape=(self._state_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._uo = tf.Variable(
-            self._u_init.build(
-                shape=(self._state_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='uo'
+        self._uo = self._variable(
+            name='uo',
+            initializer=self._u_init,
+            shape=(self._state_size, self._state_size),
+            dtype=conf.dtype
         )
-        self._uc = tf.Variable(
-            self._u_init.build(
-                shape=(self._state_size, self._state_size)
-            ),
-            dtype=conf.dtype,
-            name='uc'
+        self._uc = self._variable(
+            name='uc',
+            initializer=self._u_init,
+            shape=(self._state_size, self._state_size),
+            dtype=conf.dtype
         )
         #
         if self._with_bias:
-            self._bi = tf.Variable(
-                self._b_init.build(
-                    shape=(self._state_size,)
-                ),
-                dtype=conf.dtype,
-                name='bi'
+            self._bi = self._variable(
+                name='bi',
+                initializer=self._b_init,
+                shape=(self._state_size,),
+                dtype=conf.dtype
             )
-            self._bf = tf.Variable(
-                self._b_init.build(
-                    shape=(self._state_size,)
-                ),
-                dtype=conf.dtype,
-                name='bf'
+            self._bf = self._variable(
+                name='bf',
+                initializer=self._b_init,
+                shape=(self._state_size,),
+                dtype=conf.dtype
             )
-            self._bo = tf.Variable(
-                self._b_init.build(
-                    shape=(self._state_size,)
-                ),
-                dtype=conf.dtype,
-                name='bo'
+            self._bo = self._variable(
+                name='bo',
+                initializer=self._b_init,
+                shape=(self._state_size,),
+                dtype=conf.dtype
             )
-            self._bc = tf.Variable(
-                self._b_init.build(
-                    shape=(self._state_size,)
-                ),
-                dtype=conf.dtype,
-                name='bc'
+            self._bc = self._variable(
+                name='bc',
+                initializer=self._b_init,
+                shape=(self._state_size,),
+                dtype=conf.dtype
             )
 
     @property
@@ -1738,8 +1832,12 @@ class BatchNorm(Widget):
     def __init__(self,
                  name,
                  size,
+                 beta_init=init.Zeros(),
+                 gamma_init=init.Ones(),
                  epsilon=1e-5):
         self._size = size
+        self._beta_init = beta_init
+        self._gamma_init = gamma_init
         self._epsilon = epsilon
         super(BatchNorm, self).__init__(name)
 
@@ -1760,22 +1858,16 @@ class BatchNorm(Widget):
         return self._epsilon
 
     def _build(self):
-        beta_init = tf.zeros(
-            shape=self._size,
-            dtype=conf.dtype
-        )
-        gamma_init = tf.ones(
-            shape=self._size,
-            dtype=conf.dtype
-        )
-        self._beta = tf.Variable(
+        self._beta = self._variable(
             name='beta',
-            initial_value=beta_init,
+            initializer=self._beta_init,
+            shape=(self._size,),
             dtype=conf.dtype
         )
-        self._gamma = tf.Variable(
+        self._gamma = self._variable(
             name='gamma',
-            initial_value=gamma_init,
+            initializer=self._gamma_init,
+            shape=(self._size,),
             dtype=conf.dtype
         )
 
@@ -1823,15 +1915,15 @@ class SoftAttention(Widget):
                  seq_elem_size,
                  vec_size,
                  common_size,
-                 seq_weight_initializer=init.GlorotUniform(),
-                 context_weight_initializer=init.GlorotUniform(),
-                 omega_initializer=init.GlorotUniform()):
+                 w_seq_init=init.GlorotUniform(),
+                 w_context_init=init.GlorotUniform(),
+                 omega_init=init.GlorotUniform()):
         self._seq_elem_size = seq_elem_size
         self._vec_size = vec_size
         self._common_size = common_size
-        self._seq_weight_initializer = seq_weight_initializer
-        self._context_weight_initializer = context_weight_initializer
-        self._omega_initializer = omega_initializer
+        self._w_seq_init = w_seq_init
+        self._w_context_init = w_context_init
+        self._omega_init = omega_init
         super(SoftAttention, self).__init__(name)
 
     @property
@@ -1847,26 +1939,23 @@ class SoftAttention(Widget):
         return self._common_size
 
     def _build(self):
-        self._w = tf.Variable(
-            self._seq_weight_initializer.build(
-                shape=(self._seq_elem_size, self._common_size)
-            ),
-            dtype=conf.dtype,
-            name='w'
+        self._w = self._variable(
+            name='w',
+            initializer=self._w_seq_init,
+            shape=(self._seq_elem_size, self._common_size),
+            dtype=conf.dtype
         )
-        self._u = tf.Variable(
-            self._context_weight_initializer.build(
-                shape=(self._vec_size, self._common_size)
-            ),
-            dtype=conf.dtype,
-            name='u'
+        self._u = self._variable(
+            name='u',
+            initializer=self._w_context_init,
+            shape=(self._vec_size, self._common_size),
+            dtype=conf.dtype
         )
-        self._omega = tf.Variable(
-            self._omega_initializer.build(
-                shape=(self._common_size, 1)
-            ),
-            dtype=conf.dtype,
-            name='omega'
+        self._omega = self._variable(
+            name='omega',
+            initializer=self._omega_init,
+            shape=(self._common_size, 1),
+            dtype=conf.dtype
         )
 
     @property
@@ -1951,10 +2040,19 @@ class Gate(Widget):
     def _build(self):
         self._w_list = list()
         for i, input_size in enumerate(self._input_sizes):
-            w_init = self._w_init.build((input_size, self._output_size), name='w_%d_init' % i)
-            w = variable('w_%d' % i, w_init)
+            w = self._variable(
+                name='w_%d' % i,
+                initializer=self._w_init,
+                shape=(input_size, self._output_size),
+                dtype=conf.dtype
+            )
             self._w_list.append(w)
-        self._b = variable('b', self._b_init.build((self._output_size,), name='b_init'))
+        self._b = self._variable(
+            name='b',
+            initializer=self._b_init,
+            shape=(self._output_size,),
+            dtype=conf.dtype
+        )
 
     def _setup(self, *x_list, name='out'):
         if len(x_list) != len(self._w_list):
