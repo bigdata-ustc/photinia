@@ -1988,7 +1988,7 @@ class SoftAttention(Widget):
         """
         #
         # (batch_size, seq_length, seq_elem_size) -> (seq_length, batch_size, seq_elem_size)
-        seq = ops.transpose_sequence(seq)
+        # seq = ops.transpose_sequence(seq)
         #
         # (seq_length, batch_size, seq_elem_size) @ (seq_elem_size, common_size)
         # -> (seq_length, batch_size, common_size)
