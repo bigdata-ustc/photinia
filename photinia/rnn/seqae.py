@@ -35,18 +35,42 @@ class Encoder(ph.Widget):
         return self._state_size
 
     def _build(self):
-        self._emb_layer = ph.Linear('emb_layer', self._voc_size, self._emb_size)
+        self._emb_layer = ph.Linear(
+            'emb_layer',
+            self._voc_size,
+            self._emb_size
+        ) if self._emb_size is not None else None
         self._cell = ph.GRUCell('cell', self._emb_size, self._state_size)
 
     @property
     def emb_layer(self):
         return self._emb_layer
 
-    def _setup(self, seq, activation=ph.ops.lrelu):
+    def _setup(self,
+               seq,
+               one_hot_input=True,
+               activation=ph.ops.lrelu):
+        if not one_hot_input:
+            seq = tf.one_hot(seq, self._voc_size)
+
+        batch_size = tf.shape(seq)[0]
+        init_state = tf.zeros(shape=(batch_size, self._state_size), dtype=ph.dtype)
+
+        def _loop(prev_state, x):
+            if self._emb_layer is None:
+                x = ph.setup(x, [self._emb_layer, activation])
+            state = self._cell.setup(x, prev_state)
+            return state
+
+        states = tf.scan(
+            fn=_loop,
+            elems=tf.transpose(seq, (1, 0, 2)),
+            initializer=init_state
+        )
+        states = tf.transpose(states, (1, 0, 2))
         seq_len = ph.ops.sequence_length(seq)
-        states = self._cell.setup_sequence(seq, [self._emb_layer, activation])
-        y = ph.ops.last_elements(states, seq_len)
-        return y
+        last_state = ph.ops.last_elements(states, seq_len)
+        return last_state
 
 
 class Decoder(ph.Widget):

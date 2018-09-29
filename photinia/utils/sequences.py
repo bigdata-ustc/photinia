@@ -89,6 +89,12 @@ class Vocabulary(object):
         except KeyError:
             raise ValueError('Index %d is not in vocabulary.' % index)
 
+    def words_to_indexes(self, words):
+        index_list = [self._word_dict[word] for word in words]
+        if self._add_eos:
+            index_list.append(0)
+        return index_list
+
     def words_to_one_hots(self, words):
         one_hot_list = [
             ph.utils.one_hot(self._word_dict[word], self._voc_size, np.float32)
@@ -97,6 +103,18 @@ class Vocabulary(object):
         if self._add_eos:
             one_hot_list.append(ph.utils.one_hot(0, self._voc_size, np.float32))
         return one_hot_list
+
+    def indexes_to_words(self, indexes):
+        with io.StringIO() as buffer:
+            for index in indexes:
+                try:
+                    word = self._index_dict[index]
+                    if word == '':
+                        break
+                    buffer.write(word)
+                except KeyError:
+                    raise ValueError('Index %d is not in vocabulary.' % index)
+            return buffer.getvalue()
 
     def one_hots_to_words(self, one_hots):
         with io.StringIO() as buffer:
@@ -157,12 +175,12 @@ class WordEmbedding(object):
         return vectors
 
 
-def pad_sequences(array_list, dtype=np.float32):
-    batch_size = len(array_list)
-    seq_len = max(map(len, array_list))
-    word_size = len(array_list[0][0])
-    ret = np.zeros((batch_size, seq_len, word_size), dtype=dtype)
-    for i, arr in enumerate(array_list):
-        for j, row in enumerate(arr):
-            ret[i, j] = row
-    return ret
+def pad_sequences(sequences, padding=None):
+    if padding is None:
+        padding = np.zeros_like(sequences[0][0])
+    info_list = [(len(seq), seq) for seq in sequences]
+    max_len = max(info_list, key=lambda a: a[0])[0]
+    return [
+        [*(np.array(elem) for elem in seq), *(padding for _ in range(max_len - seq_len))]
+        for seq_len, seq in info_list
+    ]
