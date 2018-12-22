@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 
-"""
-@author: xi
-"""
-
 import argparse
 import os
 
