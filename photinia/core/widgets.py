@@ -20,6 +20,7 @@ from .. import ops
 
 def variable(name,
              initial_value,
+             dtype=conf.dtype,
              trainable=True):
     """Create a variable.
     Shortcut to "tf.Variable()".
@@ -28,6 +29,7 @@ def variable(name,
         name (str): Variable name.
         initial_value: A `Tensor`, or Python object convertible to a `Tensor`,
             which is the initial value for the Variable.
+        dtype (tf.DType): The type of elements in the tensor to be fed.
         trainable (bool): If `True`, the default, also adds the variable to the graph collection
             `GraphKeys.TRAINABLE_VARIABLES`.
 
@@ -44,7 +46,7 @@ def variable(name,
         name=name,
         initial_value=initial_value,
         trainable=trainable,
-        dtype=conf.dtype
+        dtype=dtype
     )
 
 
