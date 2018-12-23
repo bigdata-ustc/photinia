@@ -8,3 +8,4 @@
 from .context import *
 from .widgets import *
 from .training import *
+from .application import *
