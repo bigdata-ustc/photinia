@@ -7,6 +7,7 @@
 
 import threading
 import code
+import tensorflow as tf
 
 
 class Application(object):
@@ -31,38 +32,42 @@ class Application(object):
 
     def checkpoint(self):
         with self._interrupt_lock:
-            interrupt = self._interrupt
-        if interrupt:
-            self._wait_for_interrupt.release()
-            self._wait_for_continue.acquire()
+            if not self._interrupt:
+                return
+        self._shell()
+        with self._interrupt_lock:
+            self._interrupt = False
 
     def run(self):
         self._app_thread.start()
         while True:
             try:
                 self._app_thread.join()
+                break
             except KeyboardInterrupt:
                 with self._interrupt_lock:
+                    if self._interrupt:
+                        break
                     self._interrupt = True
-                print('\nWaiting for the checkpoint to interrupt...')
-                self._wait_for_interrupt.acquire()
-
-                if self._shell():
-                    break
-
-                with self._interrupt_lock:
-                    self._interrupt = False
-                self._wait_for_continue.release()
+                    print('\nWaiting for the checkpoint...')
         return self._ret_code
 
     def _shell(self):
         code.interact(
-            banner='\nYour application is interrupted.',
+            banner='Welcome to the shell!',
             local={
-                'help': self.help
+                'help': self.help,
+                'vars': self.vars
             },
-            exitmsg='\nYour application will continue to run.'
+            exitmsg='\nYour application will continue to run.\n'
         )
+
+    def vars(self):
+        print('Variables:')
+        vars = tf.global_variables()
+        for var_ in vars:
+            name = var_.name
+            print(f'[{name}]')
 
     def help(self):
         print('This is help page.')
