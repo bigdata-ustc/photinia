@@ -19,7 +19,11 @@ class DataSource(object):
 
     def __init__(self, field_names):
         self._field_names = list(field_names)
-        self._data_model = collections.namedtuple('DataItem', field_names)
+        self._data_model = collections.namedtuple(
+            'DataItem',
+            field_names,
+            rename=True  # here I set rename to "True" to prevent invalid field names, e.g., "_id" in mongodb
+        )
 
     @property
     def field_names(self):
@@ -168,7 +172,8 @@ class MongoSource(DataSource):
                  coll,
                  filters,
                  random_order,
-                 buffer_size=100000):
+                 min_buffer_size=10000,
+                 max_buffer_size=200000):
         """Data source used to access MongoDB.
 
         Args:
@@ -176,7 +181,10 @@ class MongoSource(DataSource):
             filters (dict): Filters which will be pass to MongoDB's find() operation.
             random_order (bool): If iterate the collections in random order.
                 This is usually set to True when used as train set.
-            buffer_size (int): Max size of the candidate buffer.
+            min_buffer_size (int): Min size of the candidate buffer.
+                Note that it will not return data items until the buffer reaches the min size.
+                This mechanism is involved to increase the randomness of data iteration.
+            max_buffer_size (int): Max size of the candidate buffer.
                 This option will only take effect when random_order is True.
 
         """
@@ -185,7 +193,9 @@ class MongoSource(DataSource):
         self._filters = filters if filters is not None else {}
         self._projections = {field_name: 1 for field_name in field_names}
         self._random_order = random_order
-        self._buffer_size = buffer_size
+        assert min_buffer_size < max_buffer_size
+        self._min_buffer_size = min_buffer_size
+        self._max_buffer_size = max_buffer_size
 
         self._cursor = None
         self._buffer = list()
@@ -201,30 +211,34 @@ class MongoSource(DataSource):
         )
 
     def _random_next(self):
-        #
-        # fetch next ID from the database
-        _id = None
-        error = None
-        for _ in range(3):
-            try:
-                _id = self._next_id()
-                break
-            except StopIteration as e:
-                raise e
-            except Exception as e:
-                error = e
-                time.sleep(3)
-                continue
+        while True:
+            #
+            # fetch next ID from the database
+            _id = None
+            error = None
+            for _ in range(3):
+                try:
+                    _id = self._next_id()
+                    break
+                except StopIteration as e:
+                    raise e
+                except Exception as e:
+                    error = e
+                    time.sleep(3)
+                    continue
 
-        #
-        # add the ID from the buffer
-        if _id is None:
-            raise error
-        if len(self._buffer) < self._buffer_size:
-            self._buffer.append(_id)
-        else:
-            index = random.randint(0, self._buffer_size - 1)
-            self._buffer[index] = _id
+            #
+            # add the ID from the buffer
+            if _id is None:
+                raise error
+            if len(self._buffer) < self._max_buffer_size:
+                self._buffer.append(_id)
+            else:
+                index = random.randint(0, self._max_buffer_size - 1)
+                self._buffer[index] = _id
+
+            if len(self._buffer) >= self._min_buffer_size:
+                break
 
         #
         # get an ID from buffer randomly
