@@ -351,7 +351,7 @@ class Trainable(object):
                 return var
         return None
 
-    def __getattr__(self, name):
+    def __getitem__(self, name):
         name = self._prefix + name
         with self.LOCK:
             if name in self.INSTANCES:
@@ -362,9 +362,6 @@ class Trainable(object):
             return tf.get_default_graph().get_tensor_by_name(name)
         except KeyError:
             return None
-
-    def __getitem__(self, name):
-        return self.__getattr__(name)
 
 
 class ReuseContext(_DictContext):
