@@ -24,10 +24,8 @@ def shell(fn):
 
 class Application(object):
 
-    def __init__(self, args):
-        self._args = args
-        self._app_thread = threading.Thread(target=self._main)
-        self._app_thread.setDaemon(True)
+    def __init__(self):
+        self._app_thread = None
         self._ret_code = -1
 
         self._local_dict = {}
@@ -37,10 +35,10 @@ class Application(object):
         self._var_list = []
         self._var_dict = {}
 
-    def _main(self):
-        self._ret_code = self.main()
+    def _main(self, args):
+        self._ret_code = self.main(args)
 
-    def main(self):
+    def main(self, args):
         raise NotImplementedError()
 
     def checkpoint(self):
@@ -51,7 +49,9 @@ class Application(object):
         with self._interrupt_lock:
             self._interrupt = False
 
-    def run(self):
+    def run(self, args):
+        self._app_thread = threading.Thread(target=self._main, args=(args,))
+        self._app_thread.setDaemon(True)
         self._app_thread.start()
         while True:
             try:
