@@ -18,7 +18,7 @@ if __name__ == '__main__':
             'photinia.misc',
             'photinia.testing'
         ],
-        version='0.5.0',
+        version='0.5.5',
         keywords=('deep learning', 'neural network'),
         description='Build deep learning models quickly for scientists in an object-oriented way.',
         long_description=long_description,
@@ -28,11 +28,16 @@ if __name__ == '__main__':
         url='https://github.com/XoriieInpottn/photinia',
         platforms='any',
         classifiers=[
-            'Programming Language :: Python :: 3.4',
-            'Programming Language :: Python :: 3.5',
             'Programming Language :: Python :: 3.6',
+            'Programming Language :: Python :: 3.7',
         ],
         include_package_data=True,
         zip_safe=True,
-        install_requires=['numpy', 'scipy', 'pymongo', 'opencv-python']
+        install_requires=[
+            'numpy',
+            'scipy',
+            'pymongo',
+            'opencv-python',
+            'prettytable'
+        ]
     )
