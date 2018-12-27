@@ -136,25 +136,16 @@ class Application(object):
         print()
 
     @shell
+    def value(self, var_id):
+        """Get the value of the specific variable."""
+        return context.get_session().run(self._get_variable(var_id))
+
+    @shell
     def echo(self, var_id):
         """Show value of the specific variable."""
-        if isinstance(var_id, int):
-            try:
-                var_ = self._var_list[var_id - 1]
-            except IndexError:
-                print('No such variable.', file=sys.stderr)
-                return
-        elif isinstance(var_id, str):
-            try:
-                var_ = self._var_dict[var_id]
-            except KeyError:
-                print('No such variable.', file=sys.stderr)
-                return
-        else:
-            print(f'Invalid var_id={var_id}', file=sys.stderr)
-            return
-        shape = var_.shape
+        var_ = self._get_variable(var_id)
         value = context.get_session().run(var_)
+        shape = value.shape
         if len(shape) == 0:
             print(f'{var_.name} = {value}')
         elif len(shape) == 2 and shape[0] <= 50 and shape[1] <= 50:
@@ -173,6 +164,23 @@ class Application(object):
             value = np.linalg.norm(value, 1)
             print(f'|{var_.name}| = {value}')
         print()
+
+    def _get_variable(self, var_id):
+        if isinstance(var_id, int):
+            try:
+                return self._var_list[var_id - 1]
+            except IndexError:
+                print('No such variable.', file=sys.stderr)
+                return
+        elif isinstance(var_id, str):
+            try:
+                return self._var_dict[var_id]
+            except KeyError:
+                print('No such variable.', file=sys.stderr)
+                return
+        else:
+            print(f'Invalid var_id={var_id}', file=sys.stderr)
+            return
 
     @shell
     def help(self):
