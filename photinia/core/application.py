@@ -213,7 +213,7 @@ class Application(object):
                 for name, widget in widgets.Trainable.instance_dict.items()
                 if name.startswith(prefix)
             ]
-        widget_list.sort(key=lambda a: a[0])
+        # widget_list.sort(key=lambda a: a[0])
         table = prettytable.PrettyTable(['#', 'Name', 'Type'])
         for i, (name, widget) in enumerate(widget_list, 1):
             table.add_row([i, name, widget.__class__.__name__])

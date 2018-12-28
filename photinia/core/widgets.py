@@ -4,7 +4,7 @@
 @author: xi
 @since: 2016-11-11
 """
-
+import collections
 import math
 import re
 import threading
@@ -108,7 +108,7 @@ class Trainable(object):
     """
 
     instance_lock = threading.Semaphore(1)
-    instance_dict = dict()
+    instance_dict = collections.OrderedDict()
 
     reuse_context = _ContextManager()
 
