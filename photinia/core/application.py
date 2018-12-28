@@ -206,6 +206,7 @@ class Application(object):
 
     @shell
     def widgets(self, prefix=''):
+        """List widgets."""
         with widgets.Trainable.instance_lock:
             widget_list = self._widget_list = [
                 (name, widget)
@@ -221,6 +222,7 @@ class Application(object):
 
     @shell
     def widget(self, widget_id):
+        """Get a specific widget."""
         if isinstance(widget_id, int):
             try:
                 return self._widget_list[widget_id - 1][1]
