@@ -66,36 +66,39 @@ class DataSource(ph.io.MemorySource):
         )
 
 
-def main(args):
-    mnist_data = mnist.input_data.read_data_sets('.', one_hot=False)
-    ds_train = ph.io.BatchSource(DataSource(mnist_data.train), args.batch_size)
-    ds_valid = ph.io.BatchSource(DataSource(mnist_data.validation), args.batch_size)
-    ds_test = ph.io.BatchSource(DataSource(mnist_data.test), args.batch_size)
+class Main(ph.Application):
 
-    model = Model('mnist_mlp', 1000)
-    ph.initialize_global_variables()
+    def _main(self, args):
+        mnist_data = mnist.input_data.read_data_sets('.', one_hot=False)
+        ds_train = ph.io.BatchSource(DataSource(mnist_data.train), args.batch_size)
+        ds_valid = ph.io.BatchSource(DataSource(mnist_data.validation), args.batch_size)
+        ds_test = ph.io.BatchSource(DataSource(mnist_data.test), args.batch_size)
 
-    for i in range(1, args.num_loops + 1):
-        try:
-            image, label = ds_train.next()
-        except StopIteration:
-            image, label = ds_train.next()
-        loss, = model.train(image, label)
-        if i % 100 == 0:
-            print(f'Training [{i}/{args.num_loops}|{i / args.num_loops * 100:.02f}%]... loss={loss:.06f}')
+        model = Model('mnist_mlp', 1000)
+        ph.initialize_global_variables()
 
-        if i % 500 == 0:
-            acc = ph.train.AccCalculator()
-            for image, label in ds_valid:
-                label_pred, = model.predict(image)
-                acc.update(label_pred, label)
-            print(f'Validation acc={acc.accuracy * 100}%')
-            acc = ph.train.AccCalculator()
-            for image, label in ds_test:
-                label_pred, = model.predict(image)
-                acc.update(label_pred, label)
-            print(f'Test acc={acc.accuracy * 100}%')
-    return 0
+        for i in range(1, args.num_loops + 1):
+            self.checkpoint()
+            try:
+                image, label = ds_train.next()
+            except StopIteration:
+                image, label = ds_train.next()
+            loss, = model.train(image, label)
+            if i % 100 == 0:
+                print(f'Training [{i}/{args.num_loops}|{i / args.num_loops * 100:.02f}%]... loss={loss:.06f}')
+
+            if i % 500 == 0:
+                acc = ph.train.AccCalculator()
+                for image, label in ds_valid:
+                    label_pred, = model.predict(image)
+                    acc.update(label_pred, label)
+                print(f'Validation acc={acc.accuracy * 100}%')
+                acc = ph.train.AccCalculator()
+                for image, label in ds_test:
+                    label_pred, = model.predict(image)
+                    acc.update(label_pred, label)
+                print(f'Test acc={acc.accuracy * 100}%')
+        return 0
 
 
 if __name__ == '__main__':
@@ -106,4 +109,4 @@ if __name__ == '__main__':
     #
     _args = _parser.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = _args.gpu
-    exit(main(_args))
+    exit(Main().run(_args))

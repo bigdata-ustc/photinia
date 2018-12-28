@@ -15,11 +15,18 @@ import prettytable
 import tensorflow as tf
 
 from . import context
+from . import widgets
+
+_shell_fns = set()
 
 
 def shell(fn):
     fn.__name__ = f'shell.{fn.__name__}'
     return fn
+
+
+def _is_shell_fn(fn):
+    return hasattr(fn, '__name__') and fn.__name__.find('shell.') != -1
 
 
 class Application(object):
@@ -34,11 +41,12 @@ class Application(object):
 
         self._var_list = []
         self._var_dict = {}
+        self._widget_list = []
+
+    def __main(self, args):
+        self._ret_code = self._main(args)
 
     def _main(self, args):
-        self._ret_code = self.main(args)
-
-    def main(self, args):
         raise NotImplementedError()
 
     def checkpoint(self):
@@ -50,7 +58,7 @@ class Application(object):
             self._interrupt = False
 
     def run(self, args):
-        self._app_thread = threading.Thread(target=self._main, args=(args,))
+        self._app_thread = threading.Thread(target=self.__main, args=(args,))
         self._app_thread.setDaemon(True)
         self._app_thread.start()
         while True:
@@ -67,10 +75,12 @@ class Application(object):
 
     def _shell(self):
         local_dict = self._local_dict = collections.OrderedDict((
-            (name, attr)
-            for name, attr in ((name, getattr(self, name)) for name in dir(self))
-            if hasattr(attr, '__name__') and attr.__name__.find('shell.') != -1
+            (name, fn)
+            for name, fn in ((name, getattr(self, name)) for name in dir(self))
+            if _is_shell_fn(fn)
         ))
+        local_dict['np'] = np
+        local_dict['tf'] = tf
         code.interact(
             banner='Welcome to the shell!',
             local=local_dict,
@@ -136,9 +146,21 @@ class Application(object):
         print()
 
     @shell
-    def value(self, var_id):
-        """Get the value of the specific variable."""
-        return context.get_session().run(self._get_variable(var_id))
+    def value(self, var_id, value=None):
+        """Get/Set the value of the specific variable."""
+        var_ = self._get_variable(var_id)
+        if value is None:
+            return context.get_session().run(var_)
+        else:
+            dest_shape = var_.shape
+            if isinstance(value, (int, float)):
+                value = np.full(dest_shape, value)
+            if not isinstance(value, np.ndarray):
+                value = np.array(value)
+            if value.shape != dest_shape:
+                print(f'Incompatible shape: {dest_shape} and {value.shape}.', file=sys.stderr)
+                return
+            var_.load(value, context.get_session())
 
     @shell
     def echo(self, var_id):
@@ -180,6 +202,40 @@ class Application(object):
                 return
         else:
             print(f'Invalid var_id={var_id}', file=sys.stderr)
+            return
+
+    @shell
+    def widgets(self, prefix=''):
+        with widgets.Trainable.instance_lock:
+            widget_list = self._widget_list = [
+                (name, widget)
+                for name, widget in widgets.Trainable.instance_dict.items()
+                if name.startswith(prefix)
+            ]
+        widget_list.sort(key=lambda a: a[0])
+        table = prettytable.PrettyTable(['#', 'Name', 'Type'])
+        for i, (name, widget) in enumerate(widget_list, 1):
+            table.add_row([i, name, widget.__class__.__name__])
+        print(table)
+        print()
+
+    @shell
+    def widget(self, widget_id):
+        if isinstance(widget_id, int):
+            try:
+                return self._widget_list[widget_id - 1][1]
+            except IndexError:
+                print('No such widget.', file=sys.stderr)
+                return
+        elif isinstance(widget_id, str):
+            try:
+                with widgets.Trainable.instance_lock:
+                    return widgets.Trainable.instance_dict[widget_id]
+            except KeyError:
+                print('No such widget.', file=sys.stderr)
+                return
+        else:
+            print(f'Invalid widget_id={widget_id}', file=sys.stderr)
             return
 
     @shell

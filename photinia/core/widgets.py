@@ -107,8 +107,8 @@ class Trainable(object):
     A trainable object contains TensorFlow Variables.
     """
 
-    LOCK = threading.Semaphore(1)
-    INSTANCES = dict()
+    instance_lock = threading.Semaphore(1)
+    instance_dict = dict()
 
     reuse_context = _ContextManager()
 
@@ -172,10 +172,10 @@ class Trainable(object):
             self._build()
             self._built = True
 
-        with self.LOCK:
-            if self._full_name in self.INSTANCES:
+        with self.instance_lock:
+            if self._full_name in self.instance_dict:
                 raise ValueError('Duplicated trainable name %s.' % self._full_name)
-            self.INSTANCES[self._full_name] = self
+            self.instance_dict[self._full_name] = self
         return self
 
     def _build(self):
@@ -353,9 +353,9 @@ class Trainable(object):
 
     def __getitem__(self, name):
         name = self._prefix + name
-        with self.LOCK:
-            if name in self.INSTANCES:
-                return self.INSTANCES[name]
+        with self.instance_lock:
+            if name in self.instance_dict:
+                return self.instance_dict[name]
         if name.rfind(':') == -1:
             name += ':0'
         try:
