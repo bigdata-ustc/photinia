@@ -17,16 +17,14 @@ import tensorflow as tf
 from . import context
 from . import widgets
 
-_shell_fns = set()
-
 
 def shell(fn):
-    fn.__name__ = f'shell.{fn.__name__}'
+    fn.__name__ = f'{fn.__name__}<shell>'
     return fn
 
 
 def _is_shell_fn(fn):
-    return hasattr(fn, '__name__') and fn.__name__.find('shell.') != -1
+    return hasattr(fn, '__name__') and fn.__name__.find('<shell>') != -1
 
 
 class Application(object):
