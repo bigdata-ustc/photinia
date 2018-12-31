@@ -28,8 +28,39 @@ def _is_shell_fn(fn):
 
 
 class Application(object):
+    """Base class of an photinia application.
+    The main use of this class is for "hot-tuning".
+
+    Any code that need "hot-tuning" should be defined in the "_main(args)" method of the subclass of Application.
+    Then you need to define checkpoints in that method.
+    Here is an simple example:
+
+    class Main(ph.Application):
+
+        def _main(self, args):
+            x = ph.variable('x', [[1, 2], [3, 4]])
+            step = ph.Step(
+                outputs=tf.reduce_sum(x),
+                updates=tf.assign_add(x, np.ones((2, 2)))
+            )
+            ph.initialize_global_variables()
+
+            for i in range(1000000000):
+                print(step())
+                time.sleep(0.5)
+                self.checkpoint()
+
+    """
+
+    _has_instance_lock = threading.Semaphore(1)
+    _has_instance = False
 
     def __init__(self):
+        with self._has_instance_lock:
+            if self._has_instance:
+                raise RuntimeError('Only one Application instance is allowed.')
+            self._has_instance = True
+
         self._app_thread = None
         self._ret_code = -1
 
@@ -51,7 +82,20 @@ class Application(object):
         with self._interrupt_lock:
             if not self._interrupt:
                 return
-        self._shell()
+
+        local_dict = self._local_dict = collections.OrderedDict((
+            (name, fn)
+            for name, fn in ((name, getattr(self, name)) for name in dir(self))
+            if _is_shell_fn(fn)
+        ))
+        local_dict['np'] = np
+        local_dict['tf'] = tf
+        code.interact(
+            banner='Welcome to the shell!',
+            local=local_dict,
+            exitmsg='Continue your application.'
+        )
+
         with self._interrupt_lock:
             self._interrupt = False
 
@@ -66,24 +110,10 @@ class Application(object):
             except KeyboardInterrupt:
                 with self._interrupt_lock:
                     if self._interrupt:
-                        break
+                        continue
                     self._interrupt = True
-                    print('\nWaiting for the checkpoint...')
+                    print('Waiting for the checkpoint...')
         return self._ret_code
-
-    def _shell(self):
-        local_dict = self._local_dict = collections.OrderedDict((
-            (name, fn)
-            for name, fn in ((name, getattr(self, name)) for name in dir(self))
-            if _is_shell_fn(fn)
-        ))
-        local_dict['np'] = np
-        local_dict['tf'] = tf
-        code.interact(
-            banner='Welcome to the shell!',
-            local=local_dict,
-            exitmsg='\nYour application will continue to run.\n'
-        )
 
     @shell
     def vars(self, prefix=''):
@@ -248,7 +278,9 @@ class Application(object):
             if name.startswith('_'):
                 continue
             doc = obj.__doc__
-            if doc is None:
+            if doc is None or len(doc) > 100:
+                #
+                # prevent empty doc or too long string
                 continue
             table.add_row((name, doc))
         print(table)
