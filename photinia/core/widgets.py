@@ -16,6 +16,7 @@ from . import context
 from .. import conf
 from .. import init
 from .. import ops
+from ..io import dumpers
 
 
 def variable(name,
@@ -149,13 +150,6 @@ class Trainable(object):
         """
         if self._built:
             return self
-        # if self._name is None:
-        #     #
-        #     # Build WITHOUT scope.
-        #     self._build()
-        #     self._built = True
-        #     return self
-        # else:
         #
         # Build WITH scope.
         self._scope = tf.get_variable_scope().name
@@ -323,6 +317,35 @@ class Trainable(object):
                     raise ValueError('%s is not in this model.' % name)
             var = var_dict[name_replace]
             var.load(value, session=session)
+
+    def dump(self, name, dumper=None):
+        """Dump the model. (Save all trainable variables)
+
+        Args:
+            name (str): Model name.
+                If the "dumper" argument is None, "name" is the path of the model file.
+            dumper (dumpers.ModelDumper): Model dumper.
+
+        """
+        if dumper is None:
+            dumpers.dump_model_as_file(self, name)
+        else:
+            dumper.dump(self, name)
+
+    def load(self, name, path=None, strict=True, dumper=None):
+        """Load the model.
+
+        Args:
+            name (str): Model name.
+            path (str): The path would like to be loaded into the target widget.
+            strict (bool):  Strict mode.
+            dumper (dumpers.ModelDumper): Model dumper.
+
+        """
+        if dumper is None:
+            dumpers.load_model_from_file(self, name, path, strict)
+        else:
+            dumper.load(self, name, path, strict)
 
     def get_operation(self, name):
         name = self._prefix + name

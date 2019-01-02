@@ -11,7 +11,6 @@ import re
 import shutil
 
 import gridfs
-import pymongo
 
 
 class ModelDumper(object):
@@ -21,8 +20,11 @@ class ModelDumper(object):
     def dump(self, widget, name):
         """Dump the model to somewhere (file, DB, ...) using the given name.
 
-        :param widget: The model to be dumped.
-        :param name: The output name. (Not the model name. Note that the output is just one instance of the model.)
+        Args:
+            widget: The model to be dumped.
+            name (str): The output name.
+                This is not the model name. Note that the output is just one instance of the model.
+
         """
         param_dict = widget.get_parameters()
         self._dump(param_dict, name)
@@ -62,10 +64,12 @@ class ModelDumper(object):
         in their names are replaced by 'my_model' in order to match the parameter names
         in the target model.
 
-        :param widget: A widget (or a Trainable).
-        :param name: A string. Model name.
-        :param path: A string. The path would like to be loaded into the target widget.
-        :param strict: Boolean. Strict mode.
+        Args:
+            widget: A widget (or a Trainable).
+            name (str): Model name.
+            path (str): The path would like to be loaded into the target widget.
+            strict (bool):  Strict mode.
+
         """
         param_dict = self._load(name)
         if path is not None:
@@ -209,38 +213,28 @@ class MongoDumper(ModelDumper):
     """MongoDB Model Dumper
     """
 
-    def __init__(self, host, db_name, coll='models'):
-        self._host = host
-        self._db_name = db_name
+    def __init__(self, db, coll='fs'):
+        self._db = db
         self._coll = coll
         super(MongoDumper, self).__init__()
 
-    def clear(self):
-        with pymongo.MongoClient(self._host) as conn:
-            db = conn[self._db_name]
-            coll1 = db[self._coll + '.files']
-            coll2 = db[self._coll + '.chunks']
-            coll1.remove()
-            coll2.remove()
-
     def _dump(self, param_dict, name, **kwargs):
-        with pymongo.MongoClient(self._host) as conn:
-            db = conn[self._db_name]
-            fs = gridfs.GridFS(db, collection=self._coll)
-            if fs.exists(name):
-                fs.delete(name)
-            with fs.new_file(_id=name, **kwargs) as f:
-                pickle.dump(param_dict, f)
+        fs = gridfs.GridFS(self._db, collection=self._coll)
+        coll = self._db[self._coll + '.files']
+        doc = coll.find_one({'filename': name})
+        if doc is not None:
+            file_id = doc['_id']
+            fs.delete(file_id)
+        with fs.new_file(filename=name, **kwargs) as f:
+            pickle.dump(param_dict, f)
 
     def _load(self, name):
-        with pymongo.MongoClient(self._host) as conn:
-            db = conn[self._db_name]
-            fs = gridfs.GridFS(db, collection=self._coll)
-            f = fs.find_one({'_id': name})
-            if f is None:
-                return None
-            with f:
-                param_dict = pickle.load(f)
+        fs = gridfs.GridFS(self._db, collection=self._coll)
+        f = fs.find_one({'filename': name})
+        if f is None:
+            return None
+        with f:
+            param_dict = pickle.load(f)
         return param_dict
 
 

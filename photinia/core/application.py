@@ -7,6 +7,8 @@
 
 import code
 import collections
+import os
+import pickle
 import sys
 import threading
 
@@ -68,6 +70,9 @@ class Application(object):
         self._interrupt_lock = threading.Semaphore(1)
         self._interrupt = False
 
+        self._main_dir = os.getcwd()
+        self._shell_dir = os.getcwd()
+
         self._var_list = []
         self._var_dict = {}
         self._widget_list = []
@@ -90,11 +95,15 @@ class Application(object):
         ))
         local_dict['np'] = np
         local_dict['tf'] = tf
+        self._main_dir = os.getcwd()
+        os.chdir(self._shell_dir)
         code.interact(
             banner='Welcome to the shell!',
             local=local_dict,
             exitmsg='Continue your application.'
         )
+        self._shell_dir = os.getcwd()
+        os.chdir(self._main_dir)
 
         with self._interrupt_lock:
             self._interrupt = False
@@ -267,6 +276,49 @@ class Application(object):
         else:
             print(f'Invalid widget_id={widget_id}', file=sys.stderr)
             return
+
+    @shell
+    def model_show(self, model_file):
+        """Show structure of a specific model file."""
+        with open(model_file, 'rb') as f:
+            param_dict = pickle.load(f)
+        param_list = [(k, v) for k, v in param_dict.items()]
+        param_list.sort(key=lambda a: a[0])
+        table = prettytable.PrettyTable(['Name', 'Shape'])
+        for name, value in param_list:
+            table.add_row((name, str(value.shape)))
+        print(table)
+        print()
+
+    @shell
+    def model_dump(self, model, model_file):
+        """Dump the model."""
+        model.dump(model_file)
+
+    @shell
+    def pwd(self):
+        """Show the path of the current directory."""
+        print(os.getcwd())
+        print()
+
+    @shell
+    def ls(self, dir_='.'):
+        """List files of the current directory."""
+        for filename in os.listdir(dir_):
+            file_ = os.path.join(dir_, filename)
+            if os.path.isdir(file_):
+                print(filename + '/')
+            else:
+                print(filename)
+        print()
+
+    @shell
+    def cd(self, dir_=None):
+        """Change current directory."""
+        if dir_ is None:
+            os.chdir(self._main_dir)
+        else:
+            os.chdir(dir_)
 
     @shell
     def help(self):
