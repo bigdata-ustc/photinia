@@ -7,6 +7,7 @@
 
 import collections
 import datetime as dt
+import math
 
 import numpy as np
 
@@ -31,7 +32,7 @@ class AccCalculator(object):
 
     @property
     def accuracy(self):
-        return self._num_hit / self._num_all if self._num_all > 0 else 0.0
+        return self._num_hit / self._num_all if self._num_all > 0 else math.nan
 
 
 class BiClassCalculator(object):
@@ -58,12 +59,12 @@ class BiClassCalculator(object):
     @property
     def precision(self):
         num_pos_pred = self._tp + self._fp
-        return self._tp / num_pos_pred if num_pos_pred > 0 else 0.0
+        return self._tp / num_pos_pred if num_pos_pred > 0 else math.nan
 
     @property
     def recall(self):
         num_pos_true = self._tp + self._fn
-        return self._tp / num_pos_true if num_pos_true > 0 else 0.0
+        return self._tp / num_pos_true if num_pos_true > 0 else math.nan
 
     @property
     def f1(self):
@@ -75,7 +76,7 @@ class BiClassCalculator(object):
     def accuracy(self):
         num_hit = self._tp + self._tn
         num_all = self._tp + self._tn + self._fp + self._fn
-        return num_hit / num_all if num_all > 0 else 0.0
+        return num_hit / num_all if num_all > 0 else math.nan
 
 
 def call_for_batch(context, slot, data_source):

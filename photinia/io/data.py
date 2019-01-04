@@ -284,14 +284,14 @@ class MongoSource(DataSource):
                 self._cursor = self._coll.find(self._filters, self._projections)
             try:
                 doc = next(self._cursor)
+                break
             except StopIteration as e:
+                self._cursor = None
                 raise e
             except Exception as e:
                 self._cursor = None
                 error = e
                 time.sleep(3)
-                continue
-            break
         if doc is None:
             raise error
 
