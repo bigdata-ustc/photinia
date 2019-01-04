@@ -172,8 +172,8 @@ class MongoSource(DataSource):
                  coll,
                  filters,
                  random_order,
-                 min_buffer_size=10000,
-                 max_buffer_size=200000):
+                 min_buffer_size=10,
+                 max_buffer_size=100000):
         """Data source used to access MongoDB.
 
         Args:
@@ -264,7 +264,7 @@ class MongoSource(DataSource):
 
     def _next_id(self):
         if self._cursor is None:
-            self._cursor = self._coll.find(self._filters, {'_id': 1})
+            self._cursor = self._coll.find(self._filters, {'_id': 1}, batch_size=self._min_buffer_size)
         try:
             doc = next(self._cursor)
         except Exception as e:
@@ -418,6 +418,8 @@ class ThreadBufferedSource(DataSource):
             self._thread = threading.Thread(target=self._load)
             self._thread.setDaemon(True)
             self._thread.start()
+        #
+        # TODO: If the load-thread stopped working, this will block the program!!
         row = self._queue.get(block=True)
         if isinstance(row, Exception):
             raise row
@@ -426,12 +428,15 @@ class ThreadBufferedSource(DataSource):
     def _load(self):
         """This method is executed in another thread!
         """
-        # print('DEBUG: Loading thread started.')
         while True:
             try:
                 row = self._input_source.next()
+                self._queue.put(row, block=True)
+            except StopIteration as e:
+                self._queue.put(e, block=True)
             except Exception as e:
-                self._queue.put(e)
+                #
+                # If it's not StopIteration, that means there's an fatal error in the data source.
+                # In this case, an exception should be raised and the program must be terminated.
+                self._queue.put(e, block=True)
                 break
-            self._queue.put(row, block=True)
-        # print('DEBUG: Loading thread stopped. %d loaded' % (i + 1))
