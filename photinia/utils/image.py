@@ -37,17 +37,28 @@ def load_as_array(file_or_bytes, size=None, force_bgr_channels=True):
         image = cv.imread(file_or_bytes)
     if size is not None:
         image = cv.resize(image, size)
+    if image is None:
+        raise ValueError('Failed to load image. Invalid data.')
     if force_bgr_channels:
         shape = image.shape
         order = len(shape)
-        if not (order == 3 and shape[2] == 3):
-            if order == 2:
-                image = np.reshape(image, (*shape, 1))
-                shape = image.shape
-            if shape[2] != 1:
-                raise ValueError('Invalid image shape', str(shape))
+        if order == 3:
+            num_channels = shape[2]
+            if num_channels == 3:
+                # BGR image
+                pass
+            elif num_channels == 4:
+                # BGRA image
+                image = image[:, :, :3]
+            else:
+                raise ValueError(f'Invalid image. shape={str(shape)}')
+        elif order == 2:
+            # grey scale image
+            image = np.expand_dims(image, 2)
             image = np.repeat(image, 3, 2)
-    return np.asarray(image, np.uint8)
+        else:
+            raise ValueError(f'Invalid image. shape={str(shape)}')
+    return image
 
 
 def save_array(fn_or_fp, array):
@@ -102,23 +113,7 @@ def load_as_mat(file_or_bytes, size=None, force_bgr_channels=True):
                 [:, :, 2] -> R
 
     """
-    if isinstance(file_or_bytes, bytes):
-        data = np.asarray(bytearray(file_or_bytes), np.byte)
-        image = cv.imdecode(data, cv.IMREAD_UNCHANGED)
-    else:
-        image = cv.imread(file_or_bytes)
-    if size is not None:
-        image = cv.resize(image, size)
-    if force_bgr_channels:
-        shape = image.shape
-        order = len(shape)
-        if not (order == 3 and shape[2] == 3):
-            if order == 2:
-                image = np.reshape(image, (*shape, 1))
-                shape = image.shape
-            if shape[2] != 1:
-                raise ValueError('Invalid image shape', str(shape))
-            image = np.repeat(image, 3, 2)
+    image = load_as_array(file_or_bytes, size, force_bgr_channels)
     return (np.asarray(image, dtype=np.float32) - 128.0) / 128.0
 
 
