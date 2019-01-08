@@ -5,6 +5,6 @@
 @since: 2017-12-25
 """
 
-from .images import *
-from .sequences import *
-from .utils import *
+from . import image
+from . import seq
+from .common import *
