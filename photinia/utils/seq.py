@@ -342,7 +342,7 @@ class WordEmbedding1(object):
         return vectors
 
 
-def pad_sequences(sequences, padding=None, axis=1):
+def pad_sequences(sequences, padding=None, axis=1, max_length=None):
     """Pad a batch of sequences.
     Default shape of the input: (batch_size, seq_length, ...)
 
@@ -372,24 +372,56 @@ def pad_sequences(sequences, padding=None, axis=1):
                     [1, 3, 3, 1, 4, 4, 7, 5, 0]
                 ]
             The axis for x is "1".
+        max_length (int): The length limit of the sequences.
 
     Returns:
         list: The list represents a batch of sequence.
 
     """
+    # if axis > 1:
+    #     return [
+    #         pad_sequences(seq, padding, axis - 1)
+    #         for seq in sequences
+    #     ]
+    # elif axis == 1:
+    #     if padding is None:
+    #         padding = np.zeros_like(sequences[0][0])
+    #     info_list = [(len(seq), seq) for seq in sequences]
+    #     new_len = max(info_list, key=lambda a: a[0])[0]
+    #     if max_length is not None and new_len > max_length:
+    #         new_len = max_length
+    #     return [
+    #         [*(np.array(elem) for i, elem in enumerate(seq) if i < new_len),
+    #          *(padding for _ in range(new_len - seq_len))]
+    #         for seq_len, seq in info_list
+    #     ]
+    # else:
+    #     raise ValueError('axis should be larger than 0.')
+    max_len = _get_max_len(sequences, axis)
+    if max_length is not None and max_len > max_length:
+        max_len = max_length
+    return _pad_seq(sequences, padding, axis, max_len)
+
+
+def _get_max_len(seq, axis):
+    if axis > 0:
+        return max(_get_max_len(elem, axis - 1) for elem in seq)
+    return len(seq)
+
+
+def _pad_seq(seq, padding, axis, max_len):
     if axis > 1:
         return [
-            pad_sequences(seq, padding, axis - 1)
-            for seq in sequences
+            _pad_seq(elem, padding, axis - 1, max_len)
+            for elem in seq
         ]
     elif axis == 1:
         if padding is None:
-            padding = np.zeros_like(sequences[0][0])
-        info_list = [(len(seq), seq) for seq in sequences]
-        max_len = max(info_list, key=lambda a: a[0])[0]
+            padding = np.zeros_like(seq[0][0])
         return [
-            [*(np.array(elem) for elem in seq), *(padding for _ in range(max_len - seq_len))]
-            for seq_len, seq in info_list
+            [*(np.array(elem_i) for i, elem_i in enumerate(elem) if i < max_len),
+             *(padding for _ in range(max_len - len(elem)))]
+            for elem in seq
         ]
     else:
         raise ValueError('axis should be larger than 0.')

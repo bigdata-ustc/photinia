@@ -34,7 +34,7 @@ def load_as_array(file_or_bytes, size=None, force_bgr_channels=True):
         data = np.asarray(bytearray(file_or_bytes), np.byte)
         image = cv.imdecode(data, cv.IMREAD_UNCHANGED)
     else:
-        image = cv.imread(file_or_bytes)
+        image = cv.imread(file_or_bytes, cv.IMREAD_UNCHANGED)
     if size is not None:
         image = cv.resize(image, size)
     if image is None:

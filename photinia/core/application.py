@@ -220,7 +220,7 @@ class Application(object):
             print(f'{var_.name} =')
             print(table)
         else:
-            value = np.linalg.norm(value, 1)
+            value = np.mean(np.abs(value))
             print(f'|{var_.name}| = {value}')
         print()
 
