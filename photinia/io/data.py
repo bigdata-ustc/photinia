@@ -7,6 +7,7 @@
 
 import collections
 import csv
+import json
 import queue
 import random
 import threading
@@ -153,6 +154,34 @@ class CSVSource(DataSource):
             except StopIteration:
                 self._memory_source = MemorySource(self._field_names, self._docs)
                 self._iter = None
+                self._docs = None
+                raise StopIteration()
+            self._docs.append(doc)
+            # print('DEBUG: Fetch from file.')
+            return self._data_model(
+                *(doc[field_name]
+                  for field_name in self._field_names)
+            )
+        # print('DEBUG: Fetch from memory.')
+        return self._memory_source.next()
+
+
+class JsonSource(DataSource):
+
+    def __init__(self, field_names, fp):
+        super(JsonSource, self).__init__(field_names)
+        self._fp = fp
+        self._docs = list()
+
+        self._memory_source = None
+
+    def next(self):
+        if self._memory_source is None:
+            try:
+                doc = json.loads(next(self._fp))
+            except StopIteration:
+                self._memory_source = MemorySource(self._field_names, self._docs)
+                self._fp = None
                 self._docs = None
                 raise StopIteration()
             self._docs.append(doc)
