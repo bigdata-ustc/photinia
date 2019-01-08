@@ -416,12 +416,22 @@ def _pad_seq(seq, padding, axis, max_len):
             for elem in seq
         ]
     elif axis == 1:
-        if padding is None:
-            padding = np.zeros_like(seq[0][0])
-        return [
-            [*(np.array(elem_i) for i, elem_i in enumerate(elem) if i < max_len),
-             *(padding for _ in range(max_len - len(elem)))]
-            for elem in seq
-        ]
+        elem_sample = seq[0][0]
+        if isinstance(elem_sample, (np.ndarray, collections.Iterable)):
+            if padding is None:
+                padding = np.zeros_like(seq[0][0])
+            return [
+                [*(np.array(elem_i) for i, elem_i in enumerate(elem) if i < max_len),
+                 *(padding for _ in range(max_len - len(elem)))]
+                for elem in seq
+            ]
+        else:
+            if padding is None:
+                padding = 0
+            return [
+                [*(elem_i for i, elem_i in enumerate(elem) if i < max_len),
+                 *(padding for _ in range(max_len - len(elem)))]
+                for elem in seq
+            ]
     else:
         raise ValueError('axis should be larger than 0.')
