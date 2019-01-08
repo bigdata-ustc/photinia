@@ -174,6 +174,30 @@ def print_log(context, value_names, i=None, n=None, message=None):
     print()
 
 
+class EarlyStopping(object):
+
+    def __init__(self, window_size=5):
+        self.window_size = window_size
+        self._lowest_error = None
+        self._counter = 0
+
+    def convergent(self, error):
+        if self._lowest_error is None:
+            self._lowest_error = error
+            return False
+        if error < self._lowest_error:
+            self._lowest_error = error
+            self._counter = 0
+            return False
+        else:
+            self._counter += 1
+            return self._counter >= self.window_size
+
+    def reset(self):
+        self._lowest_error = None
+        self._counter = 0
+
+
 class OptimizerWrapper(object):
     """OptimizerWrapper
     """
