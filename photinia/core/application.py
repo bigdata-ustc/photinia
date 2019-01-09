@@ -63,6 +63,7 @@ class Application(object):
                 raise RuntimeError('Only one Application instance is allowed.')
             self._has_instance = True
 
+        self._args = None
         self._app_thread = None
         self._ret_code = -1
 
@@ -109,6 +110,7 @@ class Application(object):
             self._interrupt = False
 
     def run(self, args):
+        self._args = args
         self._app_thread = threading.Thread(target=self.__main, args=(args,))
         self._app_thread.setDaemon(True)
         self._app_thread.start()
