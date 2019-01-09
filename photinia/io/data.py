@@ -423,7 +423,8 @@ class ThreadBufferedSource(DataSource):
 
     def __init__(self,
                  input_source,
-                 buffer_size=1000):
+                 buffer_size=1000,
+                 auto_reload=True):
         """Preload data to a buffer in another thread.
 
         Args:
@@ -432,6 +433,7 @@ class ThreadBufferedSource(DataSource):
 
         """
         self._input_source = input_source
+        self._auto_reload = auto_reload
         super(ThreadBufferedSource, self).__init__(input_source.field_names)
         if isinstance(buffer_size, int) and buffer_size > 0:
             self._buffer_size = buffer_size
@@ -447,8 +449,7 @@ class ThreadBufferedSource(DataSource):
             self._thread = threading.Thread(target=self._load)
             self._thread.setDaemon(True)
             self._thread.start()
-        #
-        # TODO: If the load-thread stopped working, this will block the program!!
+
         row = self._queue.get(block=True)
         if isinstance(row, Exception):
             raise row
@@ -463,9 +464,13 @@ class ThreadBufferedSource(DataSource):
                 self._queue.put(row, block=True)
             except StopIteration as e:
                 self._queue.put(e, block=True)
+                if not self._auto_reload:
+                    self._thread = None
+                    break
             except Exception as e:
                 #
                 # If it's not StopIteration, that means there's an fatal error in the data source.
                 # In this case, an exception should be raised and the program must be terminated.
                 self._queue.put(e, block=True)
+                self._thread = None
                 break
