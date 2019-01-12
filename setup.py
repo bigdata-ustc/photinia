@@ -11,10 +11,14 @@ if __name__ == '__main__':
         packages=[
             'photinia',
             'photinia.core',
+            'photinia.ops',
             'photinia.io',
-            'photinia.cnn',
-            'photinia.deep_rl',
             'photinia.utils',
+            'photinia.dnn',
+            'photinia.cnn',
+            'photinia.rnn',
+            'photinia.apps',
+            'photinia.deep_rl',
             'photinia.misc',
             'photinia.testing'
         ],
