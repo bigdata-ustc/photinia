@@ -199,8 +199,8 @@ class MongoSource(DataSource):
     def __init__(self,
                  field_names,
                  coll,
-                 filters,
-                 random_order,
+                 filters=None,
+                 random_order=False,
                  min_buffer_size=10,
                  max_buffer_size=1_000_000,
                  fake_random=False):

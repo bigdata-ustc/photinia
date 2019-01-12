@@ -99,9 +99,9 @@ class Application(object):
         self._main_dir = os.getcwd()
         os.chdir(self._shell_dir)
         code.interact(
-            banner='Welcome to the shell!',
+            banner='\n',
             local=local_dict,
-            exitmsg='Continue your application.'
+            exitmsg='\n'
         )
         self._shell_dir = os.getcwd()
         os.chdir(self._main_dir)

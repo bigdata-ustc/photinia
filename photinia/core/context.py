@@ -5,6 +5,8 @@
 @since: 2018-07-01
 """
 
+import os
+
 import tensorflow as tf
 
 
@@ -31,6 +33,27 @@ class __GlobalContext(object):
 
 
 __GLOBAL = __GlobalContext()
+
+TF_LOG_ALL = '0'
+TF_LOG_NO_INFO = '1'
+TF_LOG_NO_WARN = '2'
+TF_LOG_NONE = '3'
+
+
+def get_tf_log_level():
+    return os.environ['TF_CPP_MIN_LOG_LEVEL']
+
+
+def set_tf_log_level(level):
+    if level not in ('0', '1', '2', '3'):
+        raise ValueError(
+            'level should be one of {'
+            'TF_LOG_ALL, '
+            'TF_LOG_NO_INFO, '
+            'TF_LOG_NO_WARN, '
+            'TF_LOG_NONE}.'
+        )
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = level
 
 
 def get_session_config():
