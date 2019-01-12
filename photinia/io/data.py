@@ -194,28 +194,6 @@ class JsonSource(DataSource):
         return self._memory_source.next()
 
 
-class _Cache(object):
-
-    def __init__(self, max_size):
-        self._max_size = max_size
-        self._dict = {}
-
-    def get(self, key):
-        try:
-            return self._dict[key]
-        except KeyError:
-            return None
-
-    def put(self, key, value):
-        if len(self._dict) < self._max_size:
-            self._dict[key] = value
-        else:
-            if random.randint(0, 10) % 2 == 0:
-                old_key = next(iter(self._dict))
-                del self._dict[old_key]
-                self._dict[key] = value
-
-
 class MongoSource(DataSource):
 
     def __init__(self,
@@ -225,7 +203,6 @@ class MongoSource(DataSource):
                  random_order,
                  min_buffer_size=10,
                  max_buffer_size=1_000_000,
-                 cache_size=100_000,
                  fake_random=False):
         """Data source used to access MongoDB.
 
@@ -252,7 +229,6 @@ class MongoSource(DataSource):
 
         self._cursor = None
         self._buffer = list()
-        self._cache = _Cache(cache_size)
         self._fake_random = fake_random
 
     def next(self):
@@ -305,10 +281,7 @@ class MongoSource(DataSource):
 
         #
         # get the doc based on the ID
-        doc = self._cache.get(_id)
-        if doc is not None:
-            return doc
-        # doc = None
+        doc = None
         error = None
         for _ in range(3):
             try:
@@ -320,7 +293,6 @@ class MongoSource(DataSource):
                 continue
         if doc is None:
             raise error
-        self._cache.put(_id, doc)
 
         return doc
 
