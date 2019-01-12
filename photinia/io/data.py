@@ -225,7 +225,7 @@ class MongoSource(DataSource):
                  random_order,
                  min_buffer_size=10,
                  max_buffer_size=1_000_000,
-                 cache_size=1_000_000,
+                 cache_size=100_000,
                  fake_random=False):
         """Data source used to access MongoDB.
 
