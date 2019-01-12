@@ -194,6 +194,28 @@ class JsonSource(DataSource):
         return self._memory_source.next()
 
 
+class _Cache(object):
+
+    def __init__(self, max_size):
+        self._max_size = max_size
+        self._dict = {}
+
+    def get(self, key):
+        try:
+            return self._dict[key]
+        except KeyError:
+            return None
+
+    def put(self, key, value):
+        if len(self._dict) < self._max_size:
+            self._dict[key] = value
+        else:
+            if random.randint(0, 10) % 2 == 0:
+                old_key = next(iter(self._dict))
+                del self._dict[old_key]
+                self._dict[key] = value
+
+
 class MongoSource(DataSource):
 
     def __init__(self,
@@ -202,7 +224,9 @@ class MongoSource(DataSource):
                  filters,
                  random_order,
                  min_buffer_size=10,
-                 max_buffer_size=100000):
+                 max_buffer_size=1_000_000,
+                 cache_size=1_000_000,
+                 fake_random=False):
         """Data source used to access MongoDB.
 
         Args:
@@ -228,10 +252,15 @@ class MongoSource(DataSource):
 
         self._cursor = None
         self._buffer = list()
+        self._cache = _Cache(cache_size)
+        self._fake_random = fake_random
 
     def next(self):
         if self._random_order:
-            doc = self._random_next()
+            if self._fake_random:
+                doc = self._fake_random_next()
+            else:
+                doc = self._random_next()
         else:
             doc = self._normal_order()
         return self._data_model(
@@ -276,7 +305,10 @@ class MongoSource(DataSource):
 
         #
         # get the doc based on the ID
-        doc = None
+        doc = self._cache.get(_id)
+        if doc is not None:
+            return doc
+        # doc = None
         error = None
         for _ in range(3):
             try:
@@ -288,12 +320,13 @@ class MongoSource(DataSource):
                 continue
         if doc is None:
             raise error
+        self._cache.put(_id, doc)
 
         return doc
 
     def _next_id(self):
         if self._cursor is None:
-            self._cursor = self._coll.find(self._filters, {'_id': 1}, batch_size=self._min_buffer_size)
+            self._cursor = self._coll.find(self._filters, {'_id': 1}, batch_size=1000)
         try:
             doc = next(self._cursor)
         except Exception as e:
@@ -304,6 +337,40 @@ class MongoSource(DataSource):
             self._cursor = None
             raise e
         return doc['_id']
+
+    def _fake_random_next(self):
+        while True:
+            doc = None
+            error = None
+            for _ in range(3):
+                if self._cursor is None:
+                    self._cursor = self._coll.find(self._filters, self._projections)
+                try:
+                    doc = next(self._cursor)
+                    break
+                except StopIteration as e:
+                    self._cursor = None
+                    raise e
+                except Exception as e:
+                    self._cursor = None
+                    error = e
+                    time.sleep(3)
+                    continue
+            if doc is None:
+                raise error
+            if len(self._buffer) < self._max_buffer_size:
+                self._buffer.append(doc)
+            else:
+                index = random.randint(0, self._max_buffer_size - 1)
+                self._buffer[index] = doc
+
+            if len(self._buffer) >= self._min_buffer_size:
+                break
+
+        index = random.randint(0, len(self._buffer) - 1)
+        doc = self._buffer[index]
+
+        return doc
 
     def _normal_order(self):
         doc = None
@@ -321,6 +388,7 @@ class MongoSource(DataSource):
                 self._cursor = None
                 error = e
                 time.sleep(3)
+                continue
         if doc is None:
             raise error
 
@@ -424,7 +492,9 @@ class ThreadBufferedSource(DataSource):
     def __init__(self,
                  input_source,
                  buffer_size=1000,
-                 auto_reload=True):
+                 auto_reload=False,
+                 num_thread=0,
+                 fn=None):
         """Preload data to a buffer in another thread.
 
         Args:
@@ -433,24 +503,42 @@ class ThreadBufferedSource(DataSource):
 
         """
         self._input_source = input_source
-        self._auto_reload = auto_reload
         super(ThreadBufferedSource, self).__init__(input_source.field_names)
         if isinstance(buffer_size, int) and buffer_size > 0:
             self._buffer_size = buffer_size
         else:
             raise ValueError('buffer_size should be a positive integer.')
+        self._auto_reload = auto_reload
+        self._num_thread = num_thread
+        self._fn = fn if callable(fn) else self._next
         #
         # Async Loading
-        self._queue = queue.Queue(buffer_size)
-        self._thread = None
+        self._input_queue = queue.Queue(buffer_size)
+        self._load_thread = None
+        if num_thread > 0:
+            self._output_queue = queue.Queue(buffer_size)
+            self._input_notifies = [threading.Semaphore(0) for _ in range(num_thread)]
+            self._output_notifies = [threading.Semaphore(0) for _ in range(num_thread)]
+            self._input_notifies[-1].release()
+            self._output_notifies[-1].release()
+            self._notify_lock = threading.Semaphore(1)
+            self._process_threads = [
+                threading.Thread(target=self._process, args=(i,))
+                for i in range(num_thread)
+            ]
+            for t in self._process_threads:
+                t.setDaemon(True)
+                t.start()
+        else:
+            self._output_queue = self._input_queue
 
     def next(self):
-        if self._thread is None:
-            self._thread = threading.Thread(target=self._load)
-            self._thread.setDaemon(True)
-            self._thread.start()
+        if self._load_thread is None:
+            self._load_thread = threading.Thread(target=self._load)
+            self._load_thread.setDaemon(True)
+            self._load_thread.start()
 
-        row = self._queue.get(block=True)
+        row = self._output_queue.get(block=True)
         if isinstance(row, Exception):
             raise row
         return row
@@ -461,16 +549,40 @@ class ThreadBufferedSource(DataSource):
         while True:
             try:
                 row = self._input_source.next()
-                self._queue.put(row, block=True)
+                if self._num_thread <= 0:
+                    row = self._fn(row)
+                self._input_queue.put(row, block=True)
             except StopIteration as e:
-                self._queue.put(e, block=True)
+                self._input_queue.put(e, block=True)
                 if not self._auto_reload:
-                    self._thread = None
+                    self._load_thread = None
                     break
             except Exception as e:
                 #
                 # If it's not StopIteration, that means there's an fatal error in the data source.
                 # In this case, an exception should be raised and the program must be terminated.
-                self._queue.put(e, block=True)
-                self._thread = None
+                self._input_queue.put(e, block=True)
+                self._load_thread = None
                 break
+
+    def _process(self, i):
+        with self._notify_lock:
+            input_notify_wait = self._input_notifies[i - 1]
+            input_notify_release = self._input_notifies[i]
+            output_notify_wait = self._output_notifies[i - 1]
+            output_notify_release = self._output_notifies[i]
+
+        while True:
+            input_notify_wait.acquire()
+            row = self._input_queue.get()
+            input_notify_release.release()
+
+            if not isinstance(row, Exception):
+                row = self._fn(row)
+
+            output_notify_wait.acquire()
+            self._output_queue.put(row)
+            output_notify_release.release()
+
+    def _next(self, row):
+        return row
