@@ -8,8 +8,7 @@
 import tensorflow as tf
 
 import photinia as ph
-from photinia.dnn import mlp
-from photinia.dnn import resnet
+from photinia.dnn import resnet, mlp
 
 
 class MLPActor(ph.Widget):

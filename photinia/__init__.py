@@ -15,6 +15,8 @@ from . import io
 from . import train
 
 from . import utils
+
+from . import dnn
 from . import cnn
-from . import deep_rl
+from . import rnn
 from . import misc

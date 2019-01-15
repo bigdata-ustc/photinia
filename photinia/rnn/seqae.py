@@ -181,7 +181,7 @@ class Model(ph.Model):
         self._h = h
         self._seq_ = seq_
 
-        loss = ph.ops.neg_log_likelihood(seq, seq_, reduce=False)  # (batch_size, seq_length)
+        loss = -ph.ops.log_likelihood(seq, seq_, reduce=False)  # (batch_size, seq_length)
         seq_len = ph.ops.sequence_length(seq)
         mask = tf.sequence_mask(seq_len, dtype=ph.dtype)  # (batch_size, seq_length)
         loss = ph.ops.reduce_sum_loss(loss * mask)
