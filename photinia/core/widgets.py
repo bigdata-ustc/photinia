@@ -600,12 +600,12 @@ class Linear(Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x, axes=None, name='out'):
+    def _setup(self, x, axis=-1, name='out', axes=None):
         """Setup the layer.
 
         Args:
             x (tf.Tensor): Input tensor.
-            axes (tuple[int]|list[int]): If x is a tensor, the layer will perform tensor dot.
+            axis (int): If the order of "x" is larger than 2, the layer will perform tensor dot.
             name (str): Output name.
 
         Returns:
@@ -613,11 +613,60 @@ class Linear(Widget):
 
         """
         if self._with_bias:
-            y = tf.matmul(x, self._w) if axes is None else tf.tensordot(x, self._w, axes=axes)
+            if len(x.shape) == 2:
+                y = tf.matmul(x, self._w)
+            else:
+                if axes is None:
+                    axes = [(axis,), (0,)]
+                y = tf.tensordot(x, self._w, axes=axes)
             y = tf.add(y, self._b, name=name)
         else:
-            y = tf.matmul(x, self._w, name=name) if axes is None else tf.tensordot(x, self._w, axes, name=name)
+            if len(x.shape) == 2:
+                y = tf.matmul(x, self._w, name=name)
+            else:
+                if axes is None:
+                    axes = [(axis,), (0,)]
+                y = tf.tensordot(x, self._w, axes=axes, name=name)
         return y
+
+
+class Embedding(Widget):
+
+    def __init__(self,
+                 name,
+                 vocabulary_size,
+                 embedding_size,
+                 trainable=True,
+                 w_init=init.GlorotUniform()):
+        self._voc_size = vocabulary_size
+        self._emb_size = embedding_size
+        self._trainable = trainable
+        self._w_init = w_init
+        super(Embedding, self).__init__(name)
+
+    @property
+    def emb_size(self):
+        return self._emb_size
+
+    @property
+    def output_size(self):
+        return self._emb_size
+
+    @property
+    def trainable(self):
+        return self._trainable
+
+    def _build(self):
+        self._w = self._variable(
+            name='w',
+            initializer=self._w_init,
+            shape=(self._voc_size, self._emb_size),
+            dtype=conf.dtype,
+            trainable=self._trainable
+        )
+
+    def _setup(self, indexes, name='out'):
+        return tf.nn.embedding_lookup(self._w, indexes, name=name)
 
 
 class Dropout(Widget):
@@ -2090,7 +2139,7 @@ class Gate(Widget):
         return y
 
 
-class ResidualLinear(Widget):
+class ResidualLayer(Widget):
     """Residual network cell for DNN.
 
     The original version is contributed by zhkun~(Kun Zhang) in his testing code.
@@ -2121,7 +2170,7 @@ class ResidualLinear(Widget):
         self._w_init = w_init
         self._b_init = b_init
         self._layers = list()
-        super(ResidualLinear, self).__init__(name)
+        super(ResidualLayer, self).__init__(name)
 
     @property
     def size(self):
@@ -2142,7 +2191,12 @@ class ResidualLinear(Widget):
             )
             self._layers.append(layer)
 
-    def _setup(self, x, activation=ops.lrelu, name='out'):
+    def _setup(self,
+               x,
+               axis=-1,
+               activation=ops.lrelu,
+               name='out',
+               axes=None):
         """Setup.
 
         Args:
@@ -2156,16 +2210,20 @@ class ResidualLinear(Widget):
         """
         h = x
         for layer in self._layers[:-1]:
-            h = layer.setup(h)
+            h = layer.setup(h, axis=axis, axes=axes)
             if activation is not None:
                 h = activation(h)
 
-        h = self._layers[-1].setup(h)
-        h = tf.add(h, x, name=name)
+        h = self._layers[-1].setup(h, axis=axis, axes=axes)
+        if activation is not None:
+            h = tf.add(h, x)
+            h = activation(h, name=name)
+        else:
+            h = tf.add(h, x, name=name)
         return h
 
 
-class HighWayLinear(Widget):
+class HighwayLayer(Widget):
     """Highway network cell for DNN.
 
     The original version is contributed by zhkun~(Kun Zhang) in his testing code.
@@ -2188,7 +2246,7 @@ class HighWayLinear(Widget):
         self._size = size
         self._w_init = w_init
         self._b_init = b_init
-        super(HighWayLinear, self).__init__(name)
+        super(HighwayLayer, self).__init__(name)
 
     def _build(self):
         self._linear = Linear(
@@ -2206,7 +2264,12 @@ class HighWayLinear(Widget):
             b_init=self._b_init
         )
 
-    def _setup(self, x, activation=ops.lrelu, name='out'):
+    def _setup(self,
+               x,
+               axis=-1,
+               activation=ops.lrelu,
+               name='out',
+               axes=None):
         """Setup.
 
         Args:
@@ -2218,11 +2281,11 @@ class HighWayLinear(Widget):
             tf.Tensor: Output Tensor.
 
         """
-        h = self._linear.setup(x)
+        h = self._linear.setup(x, axis=axis, axes=axes)
         if activation is not None:
             h = activation(h)
 
-        g = self._gate.setup(x)
+        g = self._gate.setup(x, axis=axis, axes=axes)
         g = tf.nn.sigmoid(g)
 
         y = tf.add(

@@ -8,7 +8,7 @@
 import photinia as ph
 
 
-class DeepResNet(ph.Widget):
+class ResNet(ph.Widget):
 
     def __init__(self,
                  name,
@@ -24,7 +24,7 @@ class DeepResNet(ph.Widget):
         self._num_layers = num_layers
         self._w_init = w_init
         self._b_init = b_init
-        super(DeepResNet, self).__init__(name)
+        super(ResNet, self).__init__(name)
 
     def _build(self):
         self._input_layer = ph.Linear(
@@ -37,7 +37,7 @@ class DeepResNet(ph.Widget):
 
         res_layers = self._res_layers = list()
         for i in range(self._num_layers):
-            res_layer = ph.ResidualLinear(
+            res_layer = ph.ResidualLayer(
                 f'res_{str(i)}',
                 self._hidden_size,
                 w_init=self._w_init,

@@ -95,7 +95,7 @@ class DeepResActor(ph.Widget):
         super(DeepResActor, self).__init__(name)
 
     def _build(self):
-        self._resnet = resnet.DeepResNet(
+        self._resnet = resnet.ResNet(
             'resnet',
             self._state_size,
             self._action_size,
@@ -129,7 +129,7 @@ class DeepResCritic(ph.Widget):
         super(DeepResCritic, self).__init__(name)
 
     def _build(self):
-        self._resnet = resnet.DeepResNet(
+        self._resnet = resnet.ResNet(
             'resnet',
             input_size=self._state_size + self._action_size,
             output_size=1,

@@ -188,8 +188,12 @@ def flatten(x):
 
 
 def sequence_length(seq):
-    used = tf.sign(tf.reduce_max(tf.abs(seq), 2))
-    length = tf.reduce_sum(used, 1)
+    while True:
+        if len(seq.shape) <= 2:
+            break
+        seq = tf.reduce_max(tf.abs(seq), -1)
+    seq = tf.sign(seq)
+    length = tf.reduce_sum(seq, 1) if len(seq.shape) == 2 else seq
     length = tf.cast(length, tf.int32)
     return length
 
