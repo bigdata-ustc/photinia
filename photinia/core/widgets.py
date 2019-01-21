@@ -634,12 +634,22 @@ class Embedding(Widget):
 
     def __init__(self,
                  name,
-                 vocabulary_size,
-                 embedding_size,
+                 voc_size,
+                 emb_size,
                  trainable=True,
                  w_init=init.GlorotUniform()):
-        self._voc_size = vocabulary_size
-        self._emb_size = embedding_size
+        """Embedding.
+
+        Args:
+            name (str): The widget name.
+            voc_size (int): The vocabulary size.
+            emb_size (int): The embedding size.
+            trainable (bool): Is the embedding matrix trainable?
+            w_init (init.Initializer): The matrix initializer.
+
+        """
+        self._voc_size = voc_size
+        self._emb_size = emb_size
         self._trainable = trainable
         self._w_init = w_init
         super(Embedding, self).__init__(name)
@@ -667,6 +677,12 @@ class Embedding(Widget):
 
     def _setup(self, indexes, name='out'):
         return tf.nn.embedding_lookup(self._w, indexes, name=name)
+
+    def load_embedding(self, emb_matrix):
+        self._w.load(emb_matrix, context.get_session())
+
+    def dump_embedding(self):
+        return context.get_session().run(self._w)
 
 
 class Dropout(Widget):

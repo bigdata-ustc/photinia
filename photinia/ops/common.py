@@ -30,20 +30,19 @@ def log(x, eps=1e-7, name=None):
     return tf.log(x + eps, name=name)
 
 
-def exp_mask(val, mask, name=None):
-    return tf.add(val, (1.0 - tf.cast(mask, conf.float)) * VERY_NEGATIVE_NUMBER, name=name)
-
-
-def softmax(logits,
+def softmax(logit,
             axis=None,
             mask=None,
             scale=None,
             name=None):
     if mask is not None:
-        logits = exp_mask(logits, mask)
+        mask = (1.0 - tf.cast(mask, conf.float)) * VERY_NEGATIVE_NUMBER
+        while len(mask.shape) < len(logit.shape):
+            mask = tf.expand_dims(mask, axis=len(mask.shape))
+        logit += mask
     if scale is not None:
-        logits *= scale
-    return tf.nn.softmax(logits, axis=axis, name=name)
+        logit *= scale
+    return tf.nn.softmax(logit, axis=axis, name=name)
 
 
 def lrelu(x, leak=1e-3, name=None):
@@ -187,13 +186,51 @@ def flatten(x):
     return tf.reshape(x, (batch_size, -1))
 
 
-def sequence_length(seq):
-    while True:
-        if len(seq.shape) <= 2:
-            break
-        seq = tf.reduce_max(tf.abs(seq), -1)
+def sequence_length(seq, reduce_axis=None):
+    """Compute the sequence length.
+
+    Example 1) A batch of sequences with index elements.
+    seq: [
+        [1, 3, 5, 3, 1],
+        [0, 0, 0, 0, 0],
+        [2, 4, 6, 0, 0]
+        [5, 2, 7, 1, 0]
+    ]
+    sequence_length(seq): [5, 0, 3, 4]
+
+    Example 2) A batch of high dimensional sequences with index elements.
+    seq: [
+        [[1, 3, 5, 3, 1],
+        [2, 4, 0, 0, 0],
+        [2, 4, 6, 0, 0],
+        [5, 2, 7, 1, 0]],
+
+        [[1, 3, 5, 0, 0],
+        [2, 4, 0, 0, 0],
+        [1, 2, 3, 0, 0],
+        [0, 0, 0, 0, 0]]
+    ]
+
+    Example 3) A batch of sequences with embedding elements.
+    sequence_length(seq): [
+        [5, 2, 3, 4],
+        [3, 2, 3, 0]
+    ]
+    sequence_length(seq, reduce_axis=-1): [4, 3]
+
+    Args:
+        seq: The sequence tensor.
+        reduce_axis: If the elements in the sequence is a tensor, we should first reduce those dimensions.
+            The reduce_axis can be an integer or a list of integers.
+
+    Returns:
+        The sequence length tensor.
+
+    """
+    if reduce_axis is not None:
+        seq = tf.reduce_max(tf.abs(seq), axis=reduce_axis)
     seq = tf.sign(seq)
-    length = tf.reduce_sum(seq, 1) if len(seq.shape) == 2 else seq
+    length = tf.reduce_sum(seq, axis=-1)
     length = tf.cast(length, tf.int32)
     return length
 
