@@ -243,6 +243,10 @@ def last_elements(seq, seq_len):
     return h
 
 
+def concat_similar(a, b, name=None):
+    return tf.concat([a, b, a - b, a * b], axis=-1, name=name)
+
+
 def variance(x, axis=-1):
     mu = tf.reduce_mean(x, axis=axis)
     return tf.reduce_mean(x ** 2) - mu ** 2
