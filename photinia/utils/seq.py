@@ -15,16 +15,21 @@ class Vocabulary(object):
         self._elem2index = {}
         self._index2elem = {}
         self._voc_size = 0
+        self._emb_size = None
 
     @property
     def voc_size(self):
         return self._voc_size
 
     @property
+    def emb_size(self):
+        return self._emb_size
+
+    @property
     def num_elements(self):
         return len(self._elem2index)
 
-    def add(self, element, index):
+    def add(self, element, index, emb=None):
         """
 
         Args:
@@ -36,10 +41,19 @@ class Vocabulary(object):
             raise ValueError(f'Element {element} has already exist in the vocabulary.')
         if index in self._index2elem:
             raise ValueError(f'Index {index} has already exist in the vocabulary.')
-        self._elem2index[element] = index
-        self._index2elem[index] = element
+        self._elem2index[element] = (index, emb)
+        self._index2elem[index] = (element, emb)
         if index >= self._voc_size:
             self._voc_size = index + 1
+        if emb is not None:
+            emb_size = len(emb)
+            if self._emb_size is None:
+                self._emb_size = emb_size
+            elif self._emb_size != emb_size:
+                raise ValueError(
+                    f'All embedding should be the same dimension. '
+                    f'Expect {self._emb_size}, got {emb_size}'
+                )
 
     def remove(self, element):
         if element in self._elem2index:
@@ -48,16 +62,22 @@ class Vocabulary(object):
             del self._index2elem[index]
 
     def get_index(self, element):
-        return self._elem2index[element]
+        return self._elem2index[element][0]
+
+    def get_embedding_by_element(self, element):
+        return self._elem2index[element][1]
 
     def get_element(self, index):
-        return self._index2elem[index]
+        return self._index2elem[index][0]
+
+    def get_embedding_by_index(self, index):
+        return self._index2elem[index][1]
 
     def to_indexes(self, elements, ignore_key_error=False):
         indexes = []
         for elem in elements:
             try:
-                indexes.append(self._elem2index[elem])
+                indexes.append(self._elem2index[elem][0])
             except KeyError:
                 if ignore_key_error:
                     continue
@@ -68,12 +88,26 @@ class Vocabulary(object):
         elements = []
         for index in indexes:
             try:
-                elements.append(self._index2elem[index])
+                elements.append(self._index2elem[index][0])
             except KeyError:
                 if ignore_key_error:
                     continue
                 raise
         return elements
+
+    def make_embedding_matrix(self):
+        if self._emb_size is None:
+            raise RuntimeError('No embedding has been added.')
+        matrix = []
+        for index in range(self._voc_size):
+            emb = None
+            if index in self._index2elem:
+                emb = self._index2elem[index][1]
+            if emb is None:
+                emb = np.zeros(shape=(self._emb_size,), dtype=np.float32)
+            matrix.append(emb)
+        matrix = np.array(matrix, dtype=np.float32)
+        return matrix
 
 
 # class Vocabulary(object):
