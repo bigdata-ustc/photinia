@@ -766,12 +766,18 @@ class Conv2D(Widget):
         self._b_init = b_init
         #
         if self._padding == 'SAME':
-            self._output_height = math.ceil(self._input_height / stride_height)
-            self._output_width = math.ceil(self._input_width / stride_width)
+            self._output_height = math.ceil(self._input_height / stride_height) \
+                if self._input_height is not None else None
+            self._output_width = math.ceil(self._input_width / stride_width) if self._input_width is not None else None
         else:
-            self._output_height = math.ceil((self._input_height - filter_height + 1) / stride_height)
-            self._output_width = math.ceil((self._input_width - filter_width + 1) / stride_width)
-        self._flat_size = self._output_height * self._output_width * output_channels
+            self._output_height = math.ceil((self._input_height - filter_height + 1) / stride_height) \
+                if self._input_height is not None else None
+            self._output_width = math.ceil((self._input_width - filter_width + 1) / stride_width) \
+                if self._input_width is not None else None
+        if self._output_height is not None and self._output_width is not None:
+            self._flat_size = self._output_height * self._output_width * output_channels
+        else:
+            self._flat_size = None
         super(Conv2D, self).__init__(name)
 
     @property
@@ -915,12 +921,19 @@ class Pool2D(Widget):
         self._input_width = input_size[1]
         self._input_channels = input_size[2]
         if self._padding == 'SAME':
-            self._output_height = math.ceil(self._input_height / stride_height)
-            self._output_width = math.ceil(self._input_width / stride_width)
+            self._output_height = math.ceil(self._input_height / stride_height) \
+                if self._input_height is not None else None
+            self._output_width = math.ceil(self._input_width / stride_width) \
+                if self._input_width is not None else None
         else:
-            self._output_height = math.ceil((self._input_height - filter_height + 1) / stride_height)
-            self._output_width = math.ceil((self._input_width - filter_width + 1) / stride_width)
-        self._flat_size = self._output_height * self._output_width * self._input_channels
+            self._output_height = math.ceil((self._input_height - filter_height + 1) / stride_height) \
+                if self._input_height is not None else None
+            self._output_width = math.ceil((self._input_width - filter_width + 1) / stride_width) \
+                if self._input_width is not None else None
+        if self._output_height is not None and self._output_width is not None:
+            self._flat_size = self._output_height * self._output_width * self._input_channels
+        else:
+            self._flat_size = None
         super(Pool2D, self).__init__(name)
 
     @property
@@ -1026,12 +1039,19 @@ class GroupConv2D(Widget):
         self._b_init = b_init
         #
         if self._padding == 'SAME':
-            self._output_height = math.ceil(self._input_height / stride_height)
-            self._output_width = math.ceil(self._input_width / stride_width)
+            self._output_height = math.ceil(self._input_height / stride_height) \
+                if self._input_height is not None else None
+            self._output_width = math.ceil(self._input_width / stride_width) \
+                if self._input_width is not None else None
         else:
-            self._output_height = math.ceil((self._input_height - filter_height + 1) / stride_height)
-            self._output_width = math.ceil((self._input_width - filter_width + 1) / stride_width)
-        self._flat_size = self._output_height * self._output_width * output_channels
+            self._output_height = math.ceil((self._input_height - filter_height + 1) / stride_height) \
+                if self._input_height is not None else None
+            self._output_width = math.ceil((self._input_width - filter_width + 1) / stride_width) \
+                if self._input_width is not None else None
+        if self._output_height is not None and self._output_width is not None:
+            self._flat_size = self._output_height * self._output_width * output_channels
+        else:
+            self._flat_size = None
         super(GroupConv2D, self).__init__(name)
 
     @property
