@@ -1316,29 +1316,30 @@ class Conv2DTrans(Widget):
 
 
 class GRUCell(Widget):
-    """GRUCell
-    """
 
     def __init__(self,
                  name,
                  input_size,
                  state_size,
                  with_bias=False,
-                 activation=tf.nn.tanh,
                  w_init=init.TruncatedNormal(0, 1e-3),
                  u_init=init.Orthogonal(),
                  b_init=init.Zeros()):
-        """Construct a cell.
-        Does not create the parameters' tensors.
+        """The GRU cell.
 
-        :param name: Name.
-        :param input_size: Input size.
-        :param state_size: State size.
+        Args:
+            name (str): The widget name.
+            input_size: The input size.
+            state_size: The state size.
+            with_bias: If this cell has bias.
+            w_init: The input weight initializer.
+            u_init: The recurrent weight initializer.
+            b_init: The bias initializer.
+
         """
         self._input_size = input_size
         self._state_size = state_size
         self._with_bias = with_bias
-        self._activation = activation
         self._w_init = w_init
         self._u_init = u_init
         self._b_init = b_init
@@ -1367,7 +1368,6 @@ class GRUCell(Widget):
         2) Reset gate parameters (wr, ur, br).
         3) Activation parameters (wh, uh, bh).
 
-        :return: None
         """
         self._wz = self._variable(
             name='wz',
@@ -1462,16 +1462,21 @@ class GRUCell(Widget):
     def bh(self):
         return self._bh if self._with_bias else None
 
-    def _setup(self, x, prev_h, name='out'):
+    def _setup(self,
+               x,
+               prev_h,
+               activation=tf.nn.tanh,
+               name='out'):
         """Setup the cell.
 
         Args:
-            x: Input Tensor.
-            prev_h: Previous state tensor.
-            name (str): Output name.
+            x: The input tensor. shape = (batch_size, input_size)
+            prev_h: The previous state tensor. shape = (batch_size, state_size)
+            activation: The activation function.
+            name (str): The output name.
 
         Returns:
-            tf.Tensor: State tensor.
+            The state tensor. shape = (batch_size, state_size)
 
         """
         if self._with_bias:
@@ -1494,7 +1499,7 @@ class GRUCell(Widget):
                 name='reset_gate'
             )
             h = tf.matmul(x, self._wh) + tf.matmul(r * prev_h, self._uh)
-        h = self._activation(h) if self._activation is not None else h
+        h = activation(h) if activation is not None else h
         h = tf.add(z * prev_h, (1.0 - z) * h, name=name)
         return h
 
@@ -1594,7 +1599,6 @@ class LSTMCell(Widget):
                  input_size,
                  state_size,
                  with_bias=True,
-                 activation=tf.nn.tanh,
                  w_init=init.TruncatedNormal(0, 1e-3),
                  u_init=init.Orthogonal(),
                  b_init=init.Zeros()):
@@ -1605,7 +1609,6 @@ class LSTMCell(Widget):
             input_size (int): Input size.
             state_size (int): State size.
             with_bias (bool): If True, the cell will involve biases.
-            activation: Activation function.
             w_init (init.Initializer): Input weight initializer.
             u_init (initializers.Initializer): Recurrent weight initializer.
             b_init (initializers.Initializer): Bias initializer.
@@ -1614,7 +1617,6 @@ class LSTMCell(Widget):
         self._input_size = input_size
         self._state_size = state_size
         self._with_bias = with_bias
-        self._activation = activation
         self._w_init = w_init
         self._u_init = u_init
         self._b_init = b_init
@@ -1765,7 +1767,11 @@ class LSTMCell(Widget):
     def bc(self):
         return self._bc if self._with_bias else None
 
-    def _setup(self, x, prev_cell_state, prev_state):
+    def _setup(self,
+               x,
+               prev_cell_state,
+               prev_state,
+               activation=tf.nn.tanh):
         """Setup the cell.
 
         Args:
@@ -1775,6 +1781,7 @@ class LSTMCell(Widget):
                 (batch_size, state_size)
             prev_state (tf.Tensor): Previous state.
                 (batch_size, state_size)
+            activation: The activation function.
 
         Returns:
             tuple[tf.Tensor]: Tuple of cell states and states.
@@ -1810,125 +1817,13 @@ class LSTMCell(Widget):
                 name='output_gate'
             )
             cell_state = tf.matmul(x, self._wc) + tf.matmul(prev_state, self._uc)
-        if self._activation is not None:
-            cell_state = self._activation(cell_state)
+        if activation is not None:
+            cell_state = activation(cell_state)
         cell_state = tf.add(forget_gate * prev_cell_state, input_gate * cell_state, name='cell_state')
-        if self._activation is not None:
-            cell_state = self._activation(cell_state)
+        if activation is not None:
+            cell_state = activation(cell_state)
         state = tf.multiply(output_gate, cell_state, name='state')
         return cell_state, state
-
-    def setup_sequence(self,
-                       seq,
-                       widgets=None,
-                       init_cell_state=None,
-                       init_state=None):
-        """Setup this cell as an RNN for the given sequence.
-
-        Args:
-            seq (tf.Tensor): Sequence tensor.
-                (batch_size, seq_length, input_size)
-            widgets (tuple|list): List of widgets before the cell.
-            init_cell_state (tf.Tensor: Initial cell state.
-                (batch_size, state_size)
-            init_state (tf.Tensor: Initial state.
-                (batch_size, state_size)
-
-        Returns:
-            tf.Tensor: States.
-                (batch_size, seq_length, output_size)
-
-        """
-        seq = ops.transpose_sequence(seq)
-        if init_cell_state is None:
-            batch_size = tf.shape(seq)[1]
-            init_cell_state = tf.zeros(
-                shape=(batch_size, self.state_size),
-                dtype=conf.dtype,
-                name='init_cell_state'
-            )
-        if init_state is None:
-            batch_size = tf.shape(seq)[1]
-            init_state = tf.zeros(
-                shape=(batch_size, self.state_size),
-                dtype=conf.dtype,
-                name='init_state'
-            )
-        _, states = tf.scan(
-            fn=lambda acc, elem: self.setup(setup(elem, widgets), acc[0], acc[1]),
-            elems=seq,
-            initializer=(init_cell_state, init_state)
-        )
-        # cell_states = operations.transpose_sequence(cell_states, name='cell_states')
-        states = ops.transpose_sequence(states, name='states')
-        return states
-
-    def setup_recursive(self,
-                        max_len,
-                        input_widgets=None,
-                        output_widgets=None,
-                        init_cell_state=None,
-                        init_state=None,
-                        init_input=None):
-        """Setup the cell in a recursive way.
-
-        Args:
-            max_len (int|tf.Tensor): Max sequence length.
-            input_widgets (tuple|list): Widgets to setup before the cell.
-            output_widgets (tuple|list): Widgets to setup after the cell.
-            init_cell_state (tf.Tensor): Initial cell state.
-                (batch_size, state_size)
-            init_state (tf.Tensor): Initial state.
-                (batch_size, state_size)
-            init_input (tf.Tensor): Initial input.
-                (batch_size, input _size)
-
-        Returns:
-            tuple[tf.Tensor]: States and outputs.
-                (batch_size, seq_length, state_size)
-                (batch_size, seq_length, output_size)
-
-        """
-        if init_state is None and init_input is None:
-            raise ValueError('init_state and init_input should not be None at the same time.')
-
-        batch_size = tf.shape(init_input)[0]
-        if init_cell_state is None:
-            init_cell_state = tf.zeros(
-                shape=(batch_size, self.state_size),
-                dtype=conf.dtype,
-                name='init_cell_state'
-            )
-        if init_state is None:
-            init_state = tf.zeros(
-                shape=(batch_size, self.state_size),
-                dtype=conf.dtype,
-                name='init_state'
-            )
-        if init_input is None:
-            init_input = tf.zeros(
-                shape=(batch_size, self._input_size),
-                dtype=conf.dtype,
-                name='init_input'
-            )
-
-        def fn_recursive(acc, _):
-            prev_cell_state, prev_state, prev_output = acc
-            cell_input = setup(prev_output, input_widgets)
-            cell_state, state = self.setup(cell_input, prev_cell_state, prev_state)
-            output = setup(state, output_widgets)
-            return cell_state, state, output
-
-        _, states, outputs = tf.scan(
-            fn=fn_recursive,
-            elems=tf.zeros((max_len,), dtype=tf.int8),
-            initializer=(init_cell_state, init_state, init_input)
-        )
-
-        # cell_states = operations.transpose_sequence(cell_states, name='cell_states')
-        states = ops.transpose_sequence(states, name='states')
-        outputs = ops.transpose_sequence(outputs, name='outputs')
-        return states, outputs
 
 
 class BatchNorm(Widget):

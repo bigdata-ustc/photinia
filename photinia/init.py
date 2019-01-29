@@ -74,7 +74,7 @@ class RandomNormal(Initializer):
 
     def __init__(self,
                  mean=0.,
-                 stddev=0.05):
+                 stddev=5e-2):
         self._mean = mean
         self._stddev = stddev
 
@@ -108,8 +108,8 @@ class RandomUniform(Initializer):
     """
 
     def __init__(self,
-                 minval=-0.05,
-                 maxval=0.05):
+                 minval=-5e-2,
+                 maxval=5e-2):
         self._minval = minval
         self._maxval = maxval
 
@@ -148,7 +148,7 @@ class TruncatedNormal(Initializer):
 
     def __init__(self,
                  mean=0.,
-                 stddev=0.05):
+                 stddev=5e-2):
         self._mean = mean
         self._stddev = stddev
 
