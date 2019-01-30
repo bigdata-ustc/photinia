@@ -176,22 +176,41 @@ def print_log(context, value_names, i=None, n=None, message=None):
 
 class EarlyStopping(object):
 
-    def __init__(self, window_size=5):
+    def __init__(self, window_size=5, model=None):
+        """The early stopping monitor.
+
+        Args:
+            window_size (int): The windows size to monitor after the best performance.
+            model (photinia.Trainable): The model to tune.
+
+        """
         self.window_size = window_size
+        self._model = model
+
         self._lowest_error = None
+        self._best_params = None
         self._counter = 0
 
     def convergent(self, error):
         if self._lowest_error is None:
             self._lowest_error = error
+            if self._model is not None:
+                self._best_params = self._model.get_parameters()
             return False
         if error < self._lowest_error:
             self._lowest_error = error
+            if self._model is not None:
+                self._best_params = self._model.get_parameters()
             self._counter = 0
             return False
         else:
             self._counter += 1
-            return self._counter >= self.window_size
+            if self._counter >= self.window_size:
+                if self._best_params is not None:
+                    self._model.set_parameters(self._best_params)
+                return True
+            else:
+                return False
 
     def reset(self):
         self._lowest_error = None
