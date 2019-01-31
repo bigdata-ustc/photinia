@@ -2164,7 +2164,7 @@ class HighwayLayer(Widget):
                  name,
                  size,
                  w_init=init.GlorotUniform(),
-                 b_init=init.GlorotUniform()):
+                 b_init=init.Zeros()):
         """Highway network cell for DNN.
 
         Args:
