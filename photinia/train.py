@@ -10,7 +10,11 @@ import datetime as dt
 import math
 
 import numpy as np
+import tensorflow as tf
 
+from . import conf
+from . import core
+from . import init
 from . import ops
 
 
@@ -215,6 +219,65 @@ class EarlyStopping(object):
     def reset(self):
         self._lowest_error = None
         self._counter = 0
+
+
+class ExponentialDecayedValue(core.Model):
+    def __init__(self,
+                 name,
+                 init_value,
+                 shape=None,
+                 decay_rate=None,
+                 num_loops=None,
+                 min_value=None,
+                 dtype=conf.float,
+                 trainable=False):
+        self._init_value = init_value
+        self._shape = shape
+        self._decay_rate = decay_rate
+        self._num_loops = num_loops
+        self._min_value = min_value
+        self._dtype = dtype
+        self._trainable = trainable
+        super(ExponentialDecayedValue, self).__init__(name)
+
+    def _build(self):
+        if isinstance(self._init_value, init.Initializer):
+            if self._shape is None:
+                raise ValueError('"shape" must be given when Initializer is used.')
+            initializer = self._init_value
+        elif isinstance(self._init_value, np.ndarray):
+            self._shape = self._init_value.shape
+            initializer = init.Constant(self._init_value)
+        elif isinstance(self._init_value, (float, int)):
+            self._shape = ()
+            initializer = init.Constant(self._init_value)
+        else:
+            raise ValueError('Type of "init_value" should be one of {int, float, np.ndarray, ph.init.Initializer}.')
+        self._value = self._variable(
+            'value',
+            initializer=initializer,
+            shape=self._shape,
+            dtype=self._dtype,
+            trainable=self._trainable
+        )
+
+        if self._decay_rate is None:
+            if self._num_loops is None or self._min_value is None:
+                raise ValueError('"decay_rate" is missing. You should set both "num_loops" and "min_value".')
+            self._decay_rate = (self._min_value / self._init_value) ** (1.0 / self._num_loops)
+        new_value = tf.multiply(self._value, self._decay_rate)
+        if self._min_value is not None:
+            new_value = tf.maximum(new_value, self._min_value)
+        self._update_op = tf.assign(self._value, new_value)
+        self.update = core.Step(updates=self._update_op)
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def update_op(self):
+        return self._update_op
 
 
 class OptimizerWrapper(object):
