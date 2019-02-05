@@ -5,8 +5,6 @@
 @since: 2018-06-17
 """
 
-import collections
-import datetime as dt
 import math
 
 import numpy as np
@@ -15,7 +13,6 @@ import tensorflow as tf
 from . import conf
 from . import core
 from . import init
-from . import ops
 
 
 class AccCalculator(object):
@@ -83,101 +80,6 @@ class BiClassCalculator(object):
         return num_hit / num_all if num_all > 0 else math.nan
 
 
-def call_for_batch(context, slot, data_source):
-    """
-
-    Args:
-        context (dict):
-        slot (photinia.Step):
-        data_source (photinia.BatchSource):
-
-    Returns:
-        dict[str, any]:
-        tuple|list:
-
-    """
-    data_batch = data_source.next()
-    if data_batch is None:
-        data_batch = data_source.next()
-        if data_batch is None:
-            raise RuntimeError('Too many "None" returned by data source.')
-    ret = slot(*data_batch)
-    if isinstance(ret, (tuple, list)):
-        for i, value in enumerate(ret):
-            context[i] = value
-    elif isinstance(ret, (dict, collections.OrderedDict)):
-        context.update(ret)
-    else:
-        # Should not be reached, since Slot ALWAYS returns tuple or dict.
-        raise RuntimeError('Invalid Slot outputs type.')
-    return ret
-
-
-def call_for_all(context, slot, data_source):
-    """
-
-    Args:
-        context (dict):
-        slot (photinia.Step):
-        data_source (photinia.BatchSource):
-
-    Returns:
-        dict[str, list]:
-
-    """
-    ret = collections.defaultdict(list)
-    while True:
-        data_batch = data_source.next()
-        if data_batch is None:
-            break
-        ret = slot(*data_batch)
-        if isinstance(ret, (tuple, list)):
-            for i, value in enumerate(ret):
-                ret[i].append(value)
-        elif isinstance(ret, (dict, collections.OrderedDict)):
-            for name, value in ret.items():
-                ret[name].append(value)
-        else:
-            # Should not be reached, since Slot ALWAYS returns tuple or dict.
-            raise RuntimeError('Invalid Slot outputs type.')
-    context.update(ret)
-    return ret
-
-
-def print_log(context, value_names, i=None, n=None, message=None):
-    now = dt.datetime.now()
-    print(now.strftime('[%Y-%m-%d %H:%M:%S'), end='')
-
-    if i is not None:
-        if n is not None:
-            percentage = '%.2f' % (i / n * 100,)
-            print(' %s/%s|%s%%]' % (str(i), str(n), percentage), end='')
-        else:
-            print(' %s]' % str(i), end='')
-    else:
-        print(']', end='')
-
-    if message is not None:
-        print('\t' + str(message), end='')
-
-    values = context[context] if context in context else ()
-    if isinstance(values, (tuple, list)):
-        for i, name in enumerate(value_names):
-            if i < len(values):
-                value = values[i]
-                print('\t%s=%f' % (name, value), end='')
-            else:
-                print('\t%s=?' % (name,), end='')
-    elif isinstance(values, (dict, collections.OrderedDict)):
-        for name in value_names:
-            if name in values:
-                value = values[name]
-                print('\t%s=%f' % (name, value), end='')
-            else:
-                print('\t%s=?' % (name,), end='')
-    print()
-
-
 class EarlyStopping(object):
 
     def __init__(self, window_size=5, model=None):
@@ -195,6 +97,14 @@ class EarlyStopping(object):
         self._best_params = None
         self._counter = 0
 
+    @property
+    def lowest_error(self):
+        return self._lowest_error
+
+    @property
+    def best_parameters(self):
+        return self._best_params
+
     def convergent(self, error):
         if self._lowest_error is None:
             self._lowest_error = error
@@ -209,12 +119,7 @@ class EarlyStopping(object):
             return False
         else:
             self._counter += 1
-            if self._counter >= self.window_size:
-                if self._best_params is not None:
-                    self._model.set_parameters(self._best_params)
-                return True
-            else:
-                return False
+            return self._counter >= self.window_size
 
     def reset(self):
         self._lowest_error = None
@@ -278,51 +183,3 @@ class ExponentialDecayedValue(core.Model):
     @property
     def update_op(self):
         return self._update_op
-
-
-class OptimizerWrapper(object):
-    """OptimizerWrapper
-    """
-
-    def __init__(self,
-                 optimizer):
-        self._optimizer = optimizer
-
-    @property
-    def optimizer(self):
-        return self._optimizer
-
-    def minimize(self, loss, var_list=None):
-        pair_list = self._optimizer.compute_gradients(loss, var_list=var_list)
-        pair_list = self._process_gradients(pair_list)
-        return self._optimizer.apply_gradients(pair_list)
-
-    def _process_gradients(self, pair_list):
-        raise NotImplementedError
-
-
-class GradientClipping(OptimizerWrapper):
-    """GradientClipping
-    """
-
-    def __init__(self, optimizer, max_norm):
-        self._max_norm = max_norm
-        super(GradientClipping, self).__init__(optimizer)
-
-    @property
-    def max_norm(self):
-        return self._max_norm
-
-    def _process_gradients(self, pair_list):
-        pair_list, raw_grad, grad = ops.clip_gradient(pair_list, self._max_norm)
-        self._raw_grad_norm = raw_grad
-        self._grad_norm = grad
-        return pair_list
-
-    @property
-    def raw_grad_norm(self):
-        return self._raw_grad_norm
-
-    @property
-    def grad_norm(self):
-        return self._grad_norm

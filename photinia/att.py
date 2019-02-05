@@ -178,28 +178,23 @@ class MLPAttention(ph.Widget):
 
     def __init__(self,
                  name,
-                 query_size,
                  key_size,
                  attention_size,
+                 query_vec_size=None,
+                 query_seq_size=None,
                  with_bias=False,
                  w_init=ph.init.GlorotUniform(),
                  b_init=ph.init.Zeros()):
-        self._attention_size = attention_size
-        self._query_size = query_size
         self._key_size = key_size
+        self._attention_size = attention_size
+        self._query_vec_size = query_vec_size
+        self._query_seq_size = query_seq_size
         self._with_bias = with_bias
         self._w_init = w_init
         self._b_init = b_init
         super(MLPAttention, self).__init__(name)
 
     def _build(self):
-        if self._query_size is not None:
-            self._query_layer = ph.Linear(
-                'query_layer',
-                input_size=self._query_size,
-                output_size=self._attention_size,
-                with_bias=self._with_bias
-            )
         self._key_layer = ph.Linear(
             'key_layer',
             input_size=self._key_size,
@@ -212,40 +207,45 @@ class MLPAttention(ph.Widget):
             output_size=1,
             with_bias=self._with_bias
         )
+        if self._query_vec_size is not None:
+            self._query_vec_layer = ph.Linear(
+                'query_vec_layer',
+                input_size=self._query_vec_size,
+                output_size=self._attention_size,
+                with_bias=self._with_bias
+            )
+        if self._query_seq_size is not None:
+            self._query_seq_layer = ph.Linear(
+                'query_seq_layer',
+                input_size=self._query_seq_size,
+                output_size=self._attention_size,
+                with_bias=self._with_bias
+            )
 
     def _setup(self,
-               query,
-               key=None,
+               key,
                value=None,
-               query_mask=None,
+               query_vec=None,
+               query_seq=None,
                key_mask=None,
+               query_mask=None,
                activation=ph.ops.lrelu):
-        if key is None:
-            key = query
-            if key_mask is None:
-                key_mask = query_mask
         if value is None:
             value = key
 
-        # check order
-        # query => (batch_size, query_len, query_size) or (batch_size, query_size)
-        # key and value => (batch_size, key_len, key_size)
-        query_order = len(query.shape)
-        key_order = len(key.shape)
-        assert 2 <= query_order <= 3 and key_order == 3
+        # (batch_size, key_len, key_size)
+        # key_score => (batch_size, key_len, attention_size)
+        score = self._key_layer.setup(key)
 
-        if query_order == 2:
-            # (batch_size, query_size)
-            # query_score => (batch_size, attention_size)
-            query_score = self._query_layer.setup(query)
-            # query_score => (batch_size, 1, attention_size)
-            query_score = tf.expand_dims(query_score, axis=1)
+        if query_seq is None:
+            if query_vec is not None:
+                # (batch_size, query_size)
+                # query_vec_score => (batch_size, attention_size)
+                query_vec_score = self._query_vec_layer.setup(query_vec)
+                # query_vec_score => (batch_size, 1, attention_size)
+                query_vec_score = tf.expand_dims(query_vec_score, axis=1)
+                score += query_vec_score
 
-            # (batch_size, key_len, key_size)
-            # key_score => (batch_size, key_len, attention_size)
-            key_score = self._key_layer.setup(key)
-
-            score = query_score + key_score
             if activation is not None:
                 score = activation(score)
 
@@ -256,31 +256,31 @@ class MLPAttention(ph.Widget):
 
             value = tf.reduce_sum(score * value, axis=1)
             return value, score
-        elif query_order == 3:
-            query_shape = tf.shape(query)
-            key_shape = tf.shape(key)
+        else:
+            query_seq_shape = tf.shape(query_seq)
 
-            # (batch_size, query_len, query_size)
-            # query_score => (batch_size, query_len, attention_size)
-            query_score = self._query_layer.setup(query)
-            # query_score => (batch_size, query_len, 1, attention_size)
-            query_score = tf.expand_dims(query_score, axis=2)
-            # query_score => (batch_size, query_len, key_len, attention_size)
-            query_score = tf.tile(query_score, multiples=(1, 1, key_shape[1], 1))
-
-            # (batch_size, key_len, key_size)
-            # key_score => (batch_size, key_len, attention_size)
-            key_score = self._key_layer.setup(key)
             # key_score => (batch_size, 1, key_len, attention_size)
             # value => (batch_size, 1, key_len, value_size)
-            key_score = tf.expand_dims(key_score, axis=1)
+            # key_mask => (batch_size, 1, key_len)
+            score = tf.expand_dims(score, axis=1)
             value = tf.expand_dims(value, axis=1)
-            # key_score => (batch_size, query_len, key_len, attention_size)
-            # value => (batch_size, query_len, key_len, value_size)
-            key_score = tf.tile(key_score, multiples=(1, query_shape[1], 1, 1))
-            value = tf.tile(value, multiples=(1, query_shape[1], 1, 1))
+            key_mask = tf.expand_dims(key_mask, axis=1)
 
-            score = query_score + key_score
+            # (batch_size, query_len, query_size)
+            # query_seq_score => (batch_size, query_len, attention_size)
+            query_seq_score = self._query_seq_layer.setup(query_seq)
+            # query_seq_score => (batch_size, query_len, 1, attention_size)
+            query_seq_score = tf.expand_dims(query_seq_score, axis=2)
+
+            score += query_seq_score
+            if query_vec is not None:
+                # (batch_size, query_size)
+                # query_score => (batch_size, attention_size)
+                query_vec_score = self._query_vec_layer.setup(query_vec)
+                # query_score => (batch_size, 1, 1, attention_size)
+                query_vec_score = tf.reshape(query_vec_score, shape=(-1, 1, 1, self._attention_size))
+                score += query_vec_score
+
             if activation is not None:
                 score = activation(score)
 
@@ -290,14 +290,12 @@ class MLPAttention(ph.Widget):
             score = ph.ops.softmax(score, axis=1, mask=key_mask)
 
             if query_mask is not None:
-                query_mask = tf.reshape(query_mask, shape=(query_shape[0], query_shape[1], 1, 1))
-                score = query_mask * score
+                query_mask = tf.reshape(query_mask, shape=(query_seq_shape[0], query_seq_shape[1], 1, 1))
+                score *= query_mask
 
             # value => (batch_size, query_len, value_size)
             value = tf.reduce_sum(score * value, axis=2)
             return value, score
-        else:
-            raise ValueError()
 
         # # (batch_size, q,q,..., query_size)
         # # => (batch_size, q,q,..., attention_size)
