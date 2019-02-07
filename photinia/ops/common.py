@@ -41,7 +41,7 @@ def softmax(logit,
     logit = tf.exp(logit)
     if mask is not None:
         logit *= mask
-    z = tf.reduce_sum(logit, axis=axis)
+    z = tf.reduce_sum(logit, axis=axis, keepdims=True)
     logit = tf.div(logit, z, name=name)
     return logit
 
