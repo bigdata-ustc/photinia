@@ -18,7 +18,6 @@ if __name__ == '__main__':
             'photinia.cnn',
             'photinia.rnn',
             'photinia.apps',
-            'photinia.deep_rl',
             'photinia.misc',
             'photinia.testing'
         ],
