@@ -26,6 +26,7 @@ MEAN = [103.939, 116.779, 123.68]
 
 class VGG19(ph.Widget):
 
+    @ph.deprecated(message='ph.cnn.vgg.VGG19 will no longer used. Use ph.apps.imagenet.vgg.VGG19 instead.')
     def __init__(self, name='vgg19'):
         self._height = HEIGHT
         self._width = WIDTH

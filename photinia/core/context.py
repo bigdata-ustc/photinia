@@ -6,6 +6,7 @@
 """
 
 import os
+import sys
 
 import tensorflow as tf
 
@@ -66,3 +67,14 @@ def get_session():
 
 def initialize_global_variables():
     __GLOBAL.session.run(tf.global_variables_initializer())
+
+
+def deprecated(message):
+    def _decorator(fn):
+        def _fn(*args, **kwargs):
+            print(message, file=sys.stderr)
+            return fn(*args, **kwargs)
+
+        return _fn
+
+    return _decorator
