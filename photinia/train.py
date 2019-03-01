@@ -158,7 +158,7 @@ class ExponentialDecayedValue(core.Model):
             initializer = init.Constant(self._init_value)
         else:
             raise ValueError('Type of "init_value" should be one of {int, float, np.ndarray, ph.init.Initializer}.')
-        self._value = self._variable(
+        self._variable = self._variable(
             'value',
             initializer=initializer,
             shape=self._shape,
@@ -170,16 +170,20 @@ class ExponentialDecayedValue(core.Model):
             if self._num_loops is None or self._min_value is None:
                 raise ValueError('"decay_rate" is missing. You should set both "num_loops" and "min_value".')
             self._decay_rate = (self._min_value / self._init_value) ** (1.0 / self._num_loops)
-        new_value = tf.multiply(self._value, self._decay_rate)
+        new_value = tf.multiply(self._variable, self._decay_rate)
         if self._min_value is not None:
             new_value = tf.maximum(new_value, self._min_value)
-        self._update_op = tf.assign(self._value, new_value)
-        self.update = core.Step(updates=self._update_op)
+        with tf.control_dependencies([tf.assign(self._variable, new_value)]):
+            self._value = tf.identity(self._variable)
+
+        self.reset = core.Step(
+            updates=tf.assign(self._variable, self._init_value)
+        )
+
+    @property
+    def variable(self):
+        return self._variable
 
     @property
     def value(self):
         return self._value
-
-    @property
-    def update_op(self):
-        return self._update_op

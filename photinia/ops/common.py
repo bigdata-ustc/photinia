@@ -226,12 +226,12 @@ def sequence_length(seq, reduce_axis=None):
         [1, 2, 3, 0, 0],
         [0, 0, 0, 0, 0]]
     ]
-
-    Example 3) A batch of sequences with embedding elements.
     sequence_length(seq): [
         [5, 2, 3, 4],
         [3, 2, 3, 0]
     ]
+
+    Example 3) A batch of sequences with embedding elements.
     sequence_length(seq, reduce_axis=-1): [4, 3]
 
     Args:
