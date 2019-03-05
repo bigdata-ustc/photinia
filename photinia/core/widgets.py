@@ -734,6 +734,7 @@ class Conv2D(Widget):
                  stride_height=1,
                  stride_width=1,
                  padding='SAME',
+                 use_bias=True,
                  w_init=init.TruncatedNormal(),
                  b_init=init.Zeros()):
         """2D convolutional layer
@@ -762,6 +763,7 @@ class Conv2D(Widget):
         self._stride_height = stride_height
         self._stride_width = stride_width
         self._padding = padding
+        self._use_bias = use_bias
         self._w_init = w_init
         self._b_init = b_init
         #
@@ -844,12 +846,13 @@ class Conv2D(Widget):
             ),
             dtype=conf.dtype
         )
-        self._b = self._variable(
-            name='b',
-            initializer=self._b_init,
-            shape=(self._output_channels,),
-            dtype=conf.dtype
-        )
+        if self._use_bias:
+            self._b = self._variable(
+                name='b',
+                initializer=self._b_init,
+                shape=(self._output_channels,),
+                dtype=conf.dtype
+            )
 
     @property
     def w(self):
@@ -870,14 +873,24 @@ class Conv2D(Widget):
             tf.Tensor: Output tensor.
 
         """
-        y = tf.nn.conv2d(
-            input=x,
-            filter=self._w,
-            strides=[1, self._stride_height, self._stride_width, 1],
-            padding=self._padding,
-            data_format='NHWC'
-        )
-        y = tf.add(y, self._b, name=name)
+        if self._use_bias:
+            y = tf.nn.conv2d(
+                input=x,
+                filter=self._w,
+                strides=[1, self._stride_height, self._stride_width, 1],
+                padding=self._padding,
+                data_format='NHWC'
+            )
+            y = tf.add(y, self._b, name=name)
+        else:
+            y = tf.nn.conv2d(
+                input=x,
+                filter=self._w,
+                strides=[1, self._stride_height, self._stride_width, 1],
+                padding=self._padding,
+                data_format='NHWC',
+                name=name
+            )
         return y
 
 
@@ -1005,6 +1018,27 @@ class Pool2D(Widget):
         return y
 
 
+class MaxPool2D(Pool2D):
+
+    def __init__(self,
+                 name,
+                 input_size,
+                 filter_height=3,
+                 filter_width=3,
+                 stride_height=2,
+                 stride_width=2,
+                 padding='SAME'):
+        super(MaxPool2D, self).__init__(
+            name,
+            input_size=input_size,
+            filter_height=filter_height,
+            filter_width=filter_width,
+            stride_height=stride_height,
+            stride_width=stride_width,
+            padding=padding
+        )
+
+
 class GroupConv2D(Widget):
     """Group 2D convolutional layer.
     """
@@ -1019,7 +1053,7 @@ class GroupConv2D(Widget):
                  stride_height=1,
                  stride_width=1,
                  padding='SAME',
-                 data_format='NHWC',
+                 use_bias=True,
                  w_init=init.TruncatedNormal(),
                  b_init=init.Zeros()):
         if not (isinstance(input_size, (tuple, list)) and len(input_size) == 3):
@@ -1033,8 +1067,8 @@ class GroupConv2D(Widget):
         self._filter_width = filter_width
         self._stride_height = stride_height
         self._stride_width = stride_width
-        self._data_format = data_format
         self._padding = padding
+        self._use_bias = use_bias
         self._w_init = w_init
         self._b_init = b_init
         #
@@ -1122,12 +1156,13 @@ class GroupConv2D(Widget):
             ),
             dtype=conf.dtype
         )
-        self._b = self._variable(
-            name='b',
-            initializer=self._b_init,
-            shape=(self._output_channels,),
-            dtype=conf.dtype
-        )
+        if self._use_bias:
+            self._b = self._variable(
+                name='b',
+                initializer=self._b_init,
+                shape=(self._output_channels,),
+                dtype=conf.dtype
+            )
 
     @property
     def w(self):
@@ -1140,18 +1175,31 @@ class GroupConv2D(Widget):
     def _setup(self, x, name='out'):
         x_list = tf.split(value=x, num_or_size_splits=self._num_groups, axis=3)
         w_list = tf.split(value=self._w, num_or_size_splits=self._num_groups, axis=3)
-        y_list = [
-            tf.nn.conv2d(
-                input=x,
-                filter=w,
-                strides=[1, self._stride_height, self._stride_width, 1],
-                padding=self._padding,
-                data_format=self._data_format
-            )
-            for x, w in zip(x_list, w_list)
-        ]
-        y = tf.concat(values=y_list, axis=3)
-        y = tf.add(y, self._b, name=name)
+        if self._use_bias:
+            y_list = [
+                tf.nn.conv2d(
+                    input=x,
+                    filter=w,
+                    strides=[1, self._stride_height, self._stride_width, 1],
+                    padding=self._padding,
+                    data_format='NHWC'
+                )
+                for x, w in zip(x_list, w_list)
+            ]
+            y = tf.concat(values=y_list, axis=3)
+            y = tf.add(y, self._b, name=name)
+        else:
+            y_list = [
+                tf.nn.conv2d(
+                    input=x,
+                    filter=w,
+                    strides=[1, self._stride_height, self._stride_width, 1],
+                    padding=self._padding,
+                    data_format='NHWC'
+                )
+                for x, w in zip(x_list, w_list)
+            ]
+            y = tf.concat(values=y_list, axis=3, name=name)
         return y
 
 
@@ -1165,7 +1213,7 @@ class Conv2DTrans(Widget):
                  filter_width=3,
                  stride_height=2,
                  stride_width=2,
-                 data_format='NHWC',
+                 use_bias=True,
                  w_init=init.TruncatedNormal(),
                  b_init=init.Zeros(),
                  flat_input=False):
@@ -1179,7 +1227,6 @@ class Conv2DTrans(Widget):
             filter_width (int): Filter width.
             stride_height (int): Stride height.
             stride_width (int): Stride width.
-            data_format (str): Data format. 'NHWC' and 'NCHW' are supported.
             w_init (init.Initializer): Weight(Kernel) initializer.
             b_init (initializers.Initializer): Bias initializer.
             flat_input (bool): If True, the output will be converted into flat vector(with shape batch_size * dim).
@@ -1195,7 +1242,7 @@ class Conv2DTrans(Widget):
         self._filter_width = filter_width
         self._stride_height = stride_height
         self._stride_width = stride_width
-        self._data_format = data_format
+        self._use_bias = use_bias
         self._w_init = w_init
         self._b_init = b_init
         self._flat_input = flat_input
@@ -1269,12 +1316,13 @@ class Conv2DTrans(Widget):
             ),
             dtype=conf.dtype
         )
-        self._b = self._variable(
-            name='b',
-            initializer=self._b_init,
-            shape=(self._output_channels,),
-            dtype=conf.dtype
-        )
+        if self._use_bias:
+            self._b = self._variable(
+                name='b',
+                initializer=self._b_init,
+                shape=(self._output_channels,),
+                dtype=conf.dtype
+            )
 
     @property
     def w(self):
@@ -1285,16 +1333,6 @@ class Conv2DTrans(Widget):
         return self._b
 
     def _setup(self, x, name='out'):
-        """Setup transpose convolutional layer.
-
-        Args:
-            x (tf.Tensor): Input tensor.
-            name (str): Output name.
-
-        Returns:
-            tf.Tensor: Output tensor.
-
-        """
         input_shape = tf.shape(x)
         batch_size, input_height, input_width = input_shape[0], input_shape[1], input_shape[2]
         output_shape = (
@@ -1303,15 +1341,26 @@ class Conv2DTrans(Widget):
             input_width * self._stride_width,
             self._output_channels
         )
-        y = tf.nn.conv2d_transpose(
-            value=x,
-            filter=self._w,
-            output_shape=output_shape,
-            strides=[1, self._stride_height, self._stride_width, 1],
-            padding='SAME',
-            data_format='NHWC'
-        )
-        y = tf.add(y, self._b, name=name)
+        if self._use_bias:
+            y = tf.nn.conv2d_transpose(
+                value=x,
+                filter=self._w,
+                output_shape=output_shape,
+                strides=[1, self._stride_height, self._stride_width, 1],
+                padding='SAME',
+                data_format='NHWC'
+            )
+            y = tf.add(y, self._b, name=name)
+        else:
+            y = tf.nn.conv2d_transpose(
+                value=x,
+                filter=self._w,
+                output_shape=output_shape,
+                strides=[1, self._stride_height, self._stride_width, 1],
+                padding='SAME',
+                data_format='NHWC',
+                name=name
+            )
         return y
 
 
@@ -1827,9 +1876,6 @@ class LSTMCell(Widget):
 
 
 class BatchNorm(Widget):
-    """BatchNorm
-    This class is incomplete. The usage for prediction stage is actually different. Be careful!
-    """
 
     def __init__(self,
                  name,
@@ -1872,17 +1918,64 @@ class BatchNorm(Widget):
             shape=(self._size,),
             dtype=conf.dtype
         )
+        self._mean = self._variable(
+            'mean',
+            initializer=init.Zeros(),
+            shape=(self._size,),
+            dtype=conf.float
+        )
+        self._variance = self._variable(
+            'variance',
+            initializer=init.Zeros(),
+            shape=(self._size,),
+            dtype=conf.float
+        )
 
-    def _setup(self, x):
-        axes = tuple(range(len(x.get_shape()) - 1))
+    def _setup(self, x, is_training=True, axis=-1, name='out'):
+        if isinstance(is_training, bool):
+            if is_training:
+                return self._setup_for_train(x, axis, name)
+            else:
+                return self._setup_for_predict(x, name)
+        else:
+            return tf.cond(
+                is_training,
+                lambda: self._setup_for_train(x, axis, None),
+                lambda: self._setup_for_predict(x, None),
+                name=name
+            )
+
+    def _setup_for_train(self, x, axis, name):
+        if axis == -1:
+            axes = tuple(range(len(x.shape) - 1))
+        else:
+            axes = tuple(i for i in range(len(x.shape)) if i != axis)
         mean, variance = tf.nn.moments(x=x, axes=axes)
+        update_mean = tf.assign(self._mean, (self._mean + mean) * 0.5)
+        update_variance = tf.assign(self._variance, (self._variance + variance) * 0.5)
+        with tf.control_dependencies([update_mean, update_variance]):
+            mean = tf.identity(mean)
+            variance = tf.identity(variance)
         y = tf.nn.batch_normalization(
             x=x,
             mean=mean,
             variance=variance,
             offset=self._beta,
             scale=self._gamma,
-            variance_epsilon=self._epsilon
+            variance_epsilon=self._epsilon,
+            name=name
+        )
+        return y
+
+    def _setup_for_predict(self, x, name):
+        y = tf.nn.batch_normalization(
+            x=x,
+            mean=tf.stop_gradient(self._mean),
+            variance=tf.stop_gradient(self._variance),
+            offset=self._beta,
+            scale=self._gamma,
+            variance_epsilon=self._epsilon,
+            name=name
         )
         return y
 
