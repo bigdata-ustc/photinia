@@ -202,11 +202,11 @@ class MongoSource(DataSource):
                  filters=None,
                  random_order=False,
                  min_buffer_size=10,
-                 max_buffer_size=1_000_000,
-                 fake_random=False):
+                 max_buffer_size=1_000_000):
         """Data source used to access MongoDB.
 
         Args:
+            field_names (tuple|list): Field names of the data source.
             coll: MongoDB collection object.
             filters (dict): Filters which will be pass to MongoDB's find() operation.
             random_order (bool): If iterate the collections in random order.
@@ -229,14 +229,10 @@ class MongoSource(DataSource):
 
         self._cursor = None
         self._buffer = list()
-        self._fake_random = fake_random
 
     def next(self):
         if self._random_order:
-            if self._fake_random:
-                doc = self._fake_random_next()
-            else:
-                doc = self._random_next()
+            doc = self._random_next()
         else:
             doc = self._normal_order()
         return self._data_model(
@@ -309,40 +305,6 @@ class MongoSource(DataSource):
             self._cursor = None
             raise e
         return doc['_id']
-
-    def _fake_random_next(self):
-        while True:
-            doc = None
-            error = None
-            for _ in range(3):
-                if self._cursor is None:
-                    self._cursor = self._coll.find(self._filters, self._projections)
-                try:
-                    doc = next(self._cursor)
-                    break
-                except StopIteration as e:
-                    self._cursor = None
-                    raise e
-                except Exception as e:
-                    self._cursor = None
-                    error = e
-                    time.sleep(3)
-                    continue
-            if doc is None:
-                raise error
-            if len(self._buffer) < self._max_buffer_size:
-                self._buffer.append(doc)
-            else:
-                index = random.randint(0, self._max_buffer_size - 1)
-                self._buffer[index] = doc
-
-            if len(self._buffer) >= self._min_buffer_size:
-                break
-
-        index = random.randint(0, len(self._buffer) - 1)
-        doc = self._buffer[index]
-
-        return doc
 
     def _normal_order(self):
         doc = None

@@ -7,6 +7,8 @@
 
 import tensorflow as tf
 
+bool = tf.bool
+
 float = tf.float32
 float16 = tf.float16
 float32 = tf.float32

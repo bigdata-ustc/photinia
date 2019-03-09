@@ -1880,10 +1880,12 @@ class BatchNorm(Widget):
     def __init__(self,
                  name,
                  size,
+                 is_training=True,
                  beta_init=init.Zeros(),
                  gamma_init=init.Ones(),
                  epsilon=1e-5):
         self._size = size
+        self._is_training = is_training
         self._beta_init = beta_init
         self._gamma_init = gamma_init
         self._epsilon = epsilon
@@ -1931,15 +1933,23 @@ class BatchNorm(Widget):
             dtype=conf.float
         )
 
-    def _setup(self, x, is_training=True, axis=-1, name='out'):
-        if isinstance(is_training, bool):
-            if is_training:
+    def _setup(self,
+               x,
+               is_training=None,  # TODO: deprecated
+               axis=-1,
+               name='out'):
+        if is_training is not None:
+            self._is_training = is_training
+            print('Deprecated argument "is_training". Use it in the constructor.')
+
+        if isinstance(self._is_training, bool):
+            if self._is_training:
                 return self._setup_for_train(x, axis, name)
             else:
                 return self._setup_for_predict(x, name)
         else:
             return tf.cond(
-                is_training,
+                self._is_training,
                 lambda: self._setup_for_train(x, axis, None),
                 lambda: self._setup_for_predict(x, None),
                 name=name
