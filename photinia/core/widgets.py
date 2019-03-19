@@ -500,6 +500,8 @@ def setup(x, widget_list):
                 y = fn(y)
             else:
                 raise ValueError('The second term of the tuple must be str or dict.')
+        elif isinstance(w, str):
+            tf.identity(y, name=w)
         elif w is None:
             continue
         else:

@@ -202,7 +202,8 @@ class MongoSource(DataSource):
                  filters=None,
                  random_order=False,
                  min_buffer_size=10,
-                 max_buffer_size=1_000_000):
+                 max_buffer_size=1_000_000,
+                 drop_prob=None):
         """Data source used to access MongoDB.
 
         Args:
@@ -226,6 +227,7 @@ class MongoSource(DataSource):
         assert min_buffer_size < max_buffer_size
         self._min_buffer_size = min_buffer_size
         self._max_buffer_size = max_buffer_size
+        self._drop_prob = drop_prob
 
         self._cursor = None
         self._buffer = list()
@@ -296,7 +298,13 @@ class MongoSource(DataSource):
         if self._cursor is None:
             self._cursor = self._coll.find(self._filters, {'_id': 1}, batch_size=1000)
         try:
-            doc = next(self._cursor)
+            if self._drop_prob is None:
+                doc = next(self._cursor)
+            else:
+                while True:
+                    doc = next(self._cursor)
+                    if random.uniform(0.0, 1.0) >= self._drop_prob:
+                        break
         except Exception as e:
             #
             # the exception may be:
