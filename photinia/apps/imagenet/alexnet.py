@@ -19,7 +19,7 @@ MEAN = [103.939, 116.779, 123.68]
 
 class AlexNet(ph.Widget):
 
-    def __init__(self, name='alexnet'):
+    def __init__(self, name):
         self._height = HEIGHT
         self._width = WIDTH
         self._mean = np.reshape(MEAN, (1, 1, 1, 3))
