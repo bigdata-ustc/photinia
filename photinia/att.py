@@ -162,7 +162,17 @@ class MLPAttention(ph.Widget):
 
 class DotProductAttention(ph.Widget):
 
-    def __init__(self, name):
+    def __init__(self,
+                 name,
+                 dropout=None):
+        """DotProductAttention.
+
+        Args:
+            name (str): The Widget name.
+            dropout (photinia.Dropout): The dropout widget.
+
+        """
+        self._dropout = dropout
         super(DotProductAttention, self).__init__(name)
 
     def _build(self):
