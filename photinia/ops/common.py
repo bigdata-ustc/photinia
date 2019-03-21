@@ -10,12 +10,6 @@ import tensorflow as tf
 from .. import conf
 
 
-# VERY_BIG_NUMBER = 1e30
-# VERY_SMALL_NUMBER = 1e-30
-# VERY_POSITIVE_NUMBER = VERY_BIG_NUMBER
-# VERY_NEGATIVE_NUMBER = -VERY_BIG_NUMBER
-
-
 def log(x, eps=1e-7, name=None):
     """log operation with smooth.
 
@@ -46,22 +40,7 @@ def softmax(logit,
     return logit
 
 
-# def softmax(logit,
-#             axis=None,
-#             mask=None,
-#             scale=None,
-#             name=None):
-#     if mask is not None:
-#         mask = (1.0 - tf.cast(mask, conf.float)) * VERY_NEGATIVE_NUMBER
-#         while len(mask.shape) < len(logit.shape):
-#             mask = tf.expand_dims(mask, axis=len(mask.shape))
-#         logit += mask
-#     if scale is not None:
-#         logit *= scale
-#     return tf.nn.softmax(logit, axis=axis, name=name)
-
-
-def lrelu(x, leak=1e-3, name=None):
+def lrelu(x, leak=1e-2, name=None):
     """Leaky ReLU activation function.
 
     f(x) =        x     , x >= 0,
@@ -69,7 +48,7 @@ def lrelu(x, leak=1e-3, name=None):
 
     Args:
         x: Input tensor.
-        leak (float): Leak value. Default is 1e-3.
+        leak (float): Leak value. Default is 1e-2.
         name (str): Operation name.
 
     Returns:
@@ -157,26 +136,6 @@ def kl_normal(mu0,
         kl = var0 / var1 + (mu0 - mu1) ** 2 / var1 - 1 - tf.log(var0 / var1)
     kl = tf.multiply(0.5, tf.reduce_sum(kl, 1), name=name)
     return kl
-
-
-def clip_gradient(pair_list, max_norm):
-    """Perform gradient clipping.
-    If the gradients' global norm exceed 'max_norm', then shrink it to 'max_norm'.
-
-    Args:
-        pair_list (list): (grad, var) pair list.
-        max_norm: The max global norm.
-
-    Returns:
-        Output tensor.
-            (grad, var) pair list, the original gradients' norm, the clipped gradients' norm.
-
-    """
-    grad_list = [grad for grad, _ in pair_list]
-    grad_list, raw_grad = tf.clip_by_global_norm(grad_list, max_norm)
-    grad = tf.global_norm(grad_list)
-    pair_list = [(grad, pair[1]) for grad, pair in zip(grad_list, pair_list)]
-    return pair_list, raw_grad, grad
 
 
 def transpose_sequence(seq, seq_axis=1, name=None):

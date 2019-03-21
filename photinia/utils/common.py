@@ -5,42 +5,10 @@
 @since: 2017-04-23
 """
 
-import pickle
-
 import numpy as np
 import tensorflow as tf
 
 import photinia as ph
-
-pickle_loads = pickle.loads
-pickle_dumps = pickle.dumps
-
-
-def pickle_load(
-        file_, *,
-        fix_imports=True,
-        encoding='ASCII',
-        errors='strict'):
-    with open(file_, 'rb') as f:
-        return pickle.load(
-            f,
-            fix_imports=fix_imports,
-            encoding=encoding,
-            errors=errors
-        )
-
-
-def pickle_dump(obj,
-                file_,
-                protocol=None, *,
-                fix_imports=True):
-    with open(file_, 'wb') as f:
-        pickle.dump(
-            obj,
-            f,
-            protocol=protocol,
-            fix_imports=fix_imports
-        )
 
 
 def one_hot(index, dims, dtype=np.uint8):
@@ -64,19 +32,24 @@ def one_hot(index, dims, dtype=np.uint8):
     return ret
 
 
-def print_progress(current_loop,
-                   num_loops,
-                   msg='Processing',
-                   interval=1000):
-    """Print progress information in a line.
-
-    :param current_loop: Current loop number.
-    :param num_loops: Total loop count.
-    :param msg: Message shown on the line.
-    :param interval: Interval loops. Default is 1000.
-    """
-    if current_loop % interval == 0 or current_loop == num_loops:
-        print('%s [%d/%d]... %.2f%%' % (msg, current_loop, num_loops, current_loop / num_loops * 100))
+def get_trainable_variables(include, exclude=None):
+    if isinstance(include, ph.Trainable):
+        include = [include]
+    if isinstance(exclude, ph.Trainable):
+        exclude = [exclude]
+    exclude_prefix = [w.prefix for w in exclude]
+    tvars = []
+    for w in include:
+        for tvar in w.get_trainable_variables():
+            add = True
+            name = tvar.name
+            for prefix in exclude_prefix:
+                if name.startswith(prefix):
+                    add = False
+                    break
+            if add:
+                tvars.append(tvar)
+    return tvars
 
 
 def read_variables(var_or_list):
