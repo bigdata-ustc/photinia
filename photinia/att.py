@@ -20,7 +20,8 @@ class MLPAttention(ph.Widget):
                  query_seq_size=None,
                  with_bias=False,
                  w_init=ph.init.GlorotUniform(),
-                 b_init=ph.init.Zeros()):
+                 b_init=ph.init.Zeros(),
+                 activation=ph.ops.lrelu):
         self._key_size = key_size
         self._attention_size = attention_size
         self._query_vec_size = query_vec_size
@@ -28,6 +29,7 @@ class MLPAttention(ph.Widget):
         self._with_bias = with_bias
         self._w_init = w_init
         self._b_init = b_init
+        self._activation = activation
         super(MLPAttention, self).__init__(name)
 
     @property
@@ -84,8 +86,7 @@ class MLPAttention(ph.Widget):
                query_vec=None,
                query_seq=None,
                key_mask=None,
-               query_mask=None,
-               activation=ph.ops.lrelu):
+               query_mask=None):
         if value is None:
             value = key
 
@@ -102,8 +103,8 @@ class MLPAttention(ph.Widget):
                 query_vec_score = tf.expand_dims(query_vec_score, axis=1)
                 score += query_vec_score
 
-            if activation is not None:
-                score = activation(score)
+            if self._activation is not None:
+                score = self._activation(score)
 
             if key_mask is not None:
                 key_mask = tf.expand_dims(key_mask, axis=-1)
@@ -139,8 +140,8 @@ class MLPAttention(ph.Widget):
                 query_vec_score = tf.reshape(query_vec_score, shape=(-1, 1, 1, self._attention_size))
                 score += query_vec_score
 
-            if activation is not None:
-                score = activation(score)
+            if self._activation is not None:
+                score = self._activation(score)
 
             if key_mask is not None:
                 key_mask = tf.expand_dims(key_mask, axis=1)
@@ -305,8 +306,7 @@ class BiLinearAttention(ph.Widget):
                query_vec=None,
                query_seq=None,
                key_mask=None,
-               query_mask=None,
-               activation=None):
+               query_mask=None):
         if value is None:
             value = key
 
