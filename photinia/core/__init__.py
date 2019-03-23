@@ -5,7 +5,12 @@
 @since: 2018-06-17
 """
 
-from .context import *
-from .widgets import *
-from .training import *
+from .common import *
+
+from .basic import *
+from .embedding import *
+from .convolutional import *
+from .recurrent import *
+from .misc import *
+
 from .application import *

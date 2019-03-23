@@ -16,8 +16,7 @@ import numpy as np
 import prettytable
 import tensorflow as tf
 
-from . import context
-from . import widgets
+from . import common
 
 
 def shell(fn):
@@ -189,7 +188,7 @@ class Application(object):
         """Get/Set the value of the specific variable."""
         var_ = self._get_variable(var_id)
         if value is None:
-            return context.get_session().run(var_)
+            return common.get_session().run(var_)
         else:
             dest_shape = var_.shape
             if isinstance(value, (int, float)):
@@ -199,13 +198,13 @@ class Application(object):
             if value.shape != dest_shape:
                 print(f'Incompatible shape: {dest_shape} and {value.shape}.', file=sys.stderr)
                 return
-            var_.load(value, context.get_session())
+            var_.load(value, common.get_session())
 
     @shell
     def echo(self, var_id):
         """Show value of the specific variable."""
         var_ = self._get_variable(var_id)
-        value = context.get_session().run(var_)
+        value = common.get_session().run(var_)
         shape = value.shape
         if len(shape) == 0:
             print(f'{var_.name} = {value}')
@@ -246,10 +245,10 @@ class Application(object):
     @shell
     def widgets(self, prefix=''):
         """List widgets."""
-        with widgets.Trainable.instance_lock:
+        with common.Trainable.instance_lock:
             widget_list = self._widget_list = [
                 (name, widget)
-                for name, widget in widgets.Trainable.instance_dict.items()
+                for name, widget in common.Trainable.instance_dict.items()
                 if name.startswith(prefix)
             ]
         # widget_list.sort(key=lambda a: a[0])
@@ -270,8 +269,8 @@ class Application(object):
                 return
         elif isinstance(widget_id, str):
             try:
-                with widgets.Trainable.instance_lock:
-                    return widgets.Trainable.instance_dict[widget_id]
+                with common.Trainable.instance_lock:
+                    return common.Trainable.instance_dict[widget_id]
             except KeyError:
                 print('No such widget.', file=sys.stderr)
                 return
