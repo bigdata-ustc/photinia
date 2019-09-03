@@ -449,7 +449,10 @@ class Trainable(object):
         name = self._prefix + name
         with self.instance_lock:
             if name in self.instance_dict:
-                return self.instance_dict[name]
+                instance = self.instance_dict[name]
+                if isinstance(instance, Trainable):
+                    return instance
+
         if name.rfind(':') == -1:
             name += ':0'
         try:

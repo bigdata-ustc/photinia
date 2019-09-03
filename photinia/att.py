@@ -18,10 +18,11 @@ class MLPAttention(ph.Widget):
                  attention_size,
                  query_vec_size=None,
                  query_seq_size=None,
-                 with_bias=False,
+                 with_bias=True,
                  w_init=ph.init.GlorotUniform(),
                  b_init=ph.init.Zeros(),
-                 activation=ph.ops.lrelu):
+                 activation=ph.ops.lrelu,
+                 norm=None):
         self._key_size = key_size
         self._attention_size = attention_size
         self._query_vec_size = query_vec_size
@@ -30,6 +31,7 @@ class MLPAttention(ph.Widget):
         self._w_init = w_init
         self._b_init = b_init
         self._activation = activation
+        self._norm = norm
         super(MLPAttention, self).__init__(name)
 
     @property
@@ -57,27 +59,35 @@ class MLPAttention(ph.Widget):
             'key_layer',
             input_size=self._key_size,
             output_size=self._attention_size,
-            with_bias=self._with_bias
+            with_bias=self._with_bias,
+            w_init=self._w_init,
+            b_init=self._b_init
         )
         self._att_layer = ph.Linear(
             'att_layer',
             input_size=self._attention_size,
             output_size=1,
-            with_bias=self._with_bias
+            with_bias=self._with_bias,
+            w_init=self._w_init,
+            b_init=self._b_init
         )
         if self._query_vec_size is not None:
             self._query_vec_layer = ph.Linear(
                 'query_vec_layer',
                 input_size=self._query_vec_size,
                 output_size=self._attention_size,
-                with_bias=self._with_bias
+                with_bias=self._with_bias,
+                w_init=self._w_init,
+                b_init=self._b_init
             )
         if self._query_seq_size is not None:
             self._query_seq_layer = ph.Linear(
                 'query_seq_layer',
                 input_size=self._query_seq_size,
                 output_size=self._attention_size,
-                with_bias=self._with_bias
+                with_bias=self._with_bias,
+                w_init=self._w_init,
+                b_init=self._b_init
             )
 
     def _setup(self,
@@ -103,6 +113,8 @@ class MLPAttention(ph.Widget):
                 query_vec_score = tf.expand_dims(query_vec_score, axis=1)
                 score += query_vec_score
 
+            if self._norm is not None:
+                score = self._norm(score)
             if self._activation is not None:
                 score = self._activation(score)
 
@@ -140,6 +152,8 @@ class MLPAttention(ph.Widget):
                 query_vec_score = tf.reshape(query_vec_score, shape=(-1, 1, 1, self._attention_size))
                 score += query_vec_score
 
+            if self._norm is not None:
+                score = self._norm(score)
             if self._activation is not None:
                 score = self._activation(score)
 

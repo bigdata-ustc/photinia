@@ -9,6 +9,11 @@ import tensorflow as tf
 
 from .. import conf
 
+VERY_BIG_NUMBER = 1e30
+VERY_SMALL_NUMBER = 1e-30
+VERY_POSITIVE_NUMBER = VERY_BIG_NUMBER
+VERY_NEGATIVE_NUMBER = -VERY_BIG_NUMBER
+
 
 def log(x, eps=1e-7, name=None):
     """log operation with smooth.
@@ -25,19 +30,23 @@ def log(x, eps=1e-7, name=None):
     return tf.log(x + eps, name=name)
 
 
-def softmax(logit,
-            axis=None,
+def softmax(logits,
+            axis,
             mask=None,
             scale=None,
             name=None):
-    if scale is not None:
-        logit *= scale
-    logit = tf.exp(logit)
+    """softmax with mask.
+    """
     if mask is not None:
-        logit *= mask
-    z = tf.reduce_sum(logit, axis=axis, keepdims=True)
-    logit = tf.div(logit, z, name=name)
-    return logit
+        logits = tf.add(
+            logits,
+            (1.0 - tf.cast(mask, conf.float)) * VERY_NEGATIVE_NUMBER
+        )
+    return tf.nn.softmax(
+        logits if scale is None else scale * logits,
+        axis=axis,
+        name=name
+    )
 
 
 def lrelu(x, leak=1e-2, name=None):

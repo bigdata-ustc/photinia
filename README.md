@@ -12,7 +12,7 @@ do research on deep learning.
 # Dependencies
 
 * Python 3.6+
-* TensorFlow 1.2.0+
+* TensorFlow 1.13.1
 * numpy
 * scipy
 * pymongo

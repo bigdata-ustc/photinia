@@ -19,64 +19,86 @@ class Conv2D(common.Widget):
 
     def __init__(self,
                  name,
-                 input_size,
-                 output_channels,
-                 filter_height=3,
-                 filter_width=3,
-                 stride_height=1,
-                 stride_width=1,
+                 input_channels=None,
+                 output_channels=None,
+                 filter_size=None,
+                 stride_size=None,
+                 input_size=None,
+                 filter_height=None, filter_width=None,
+                 stride_height=None, stride_width=None,
                  padding='SAME',
                  use_bias=True,
                  w_init=init.TruncatedNormal(),
                  b_init=init.Zeros()):
-        """2D convolutional layer
+        ################################################################################
+        # filter and stride
+        ################################################################################
+        self._filter_height, self._filter_width = filter_height, filter_width
+        if filter_size is not None:
+            if isinstance(filter_size, (tuple, list)):
+                assert len(filter_size) == 2
+                self._filter_height, self._filter_width = filter_size
+            else:
+                self._filter_height = self._filter_width = filter_size
+        if self._filter_height is None or self._filter_width is None:
+            raise ValueError(f'Invalid filter: height={self._filter_height}, width={self._filter_width}.')
 
-        Args:
-            name (str): Widget name.
-            input_size (tuple[int]|list[int]): Input size.
-            output_channels (int): Numbers of output channels.
-            filter_height (int): Filter height.
-            filter_width (int): Filter width.
-            stride_height (int): Stride height.
-            stride_width (int): Stride width.
-            padding (str): Padding type. Should be one of {"SAME", "VALID"}. Default is "SAME".
-            w_init (init.Initializer): Weight(Kernel) initializer.
-            b_init (initializers.Initializer): Bias initializer.
+        self._stride_height, self._stride_width = stride_height, stride_width
+        if stride_size is not None:
+            if isinstance(stride_size, (tuple, list)):
+                assert len(stride_size) == 2
+                self._stride_height, self._stride_width = stride_size
+            else:
+                self._stride_height = self._stride_width = stride_size
+        if self._stride_height is None or self._stride_width is None:
+            raise ValueError(f'Invalid stride: height={self._stride_height}, width={self._stride_width}.')
 
-        """
-        if not (isinstance(input_size, (tuple, list)) and len(input_size) == 3):
-            raise ValueError('input_size should be tuple or list with 3 elements.')
-        self._input_height = input_size[0]
-        self._input_width = input_size[1]
-        self._input_channels = input_size[2]
-        self._output_channels = output_channels
-        self._filter_height = filter_height
-        self._filter_width = filter_width
-        self._stride_height = stride_height
-        self._stride_width = stride_width
+        ################################################################################
+        # misc
+        ################################################################################
+        padding = padding.upper()
+        assert padding in {'SAME', 'VALID'}
         self._padding = padding
+
         self._use_bias = use_bias
         self._w_init = w_init
         self._b_init = b_init
-        #
-        if self._padding == 'SAME':
-            self._output_height = math.ceil(self._input_height / stride_height) \
-                if self._input_height is not None else None
-            self._output_width = math.ceil(self._input_width / stride_width) if self._input_width is not None else None
-        else:
-            self._output_height = math.ceil((self._input_height - filter_height + 1) / stride_height) \
-                if self._input_height is not None else None
-            self._output_width = math.ceil((self._input_width - filter_width + 1) / stride_width) \
-                if self._input_width is not None else None
-        if self._output_height is not None and self._output_width is not None:
-            self._flat_size = self._output_height * self._output_width * output_channels
-        else:
+
+        ################################################################################
+        # input_size and output_size
+        ################################################################################
+        self._input_channels = input_channels
+        self._output_channels = output_channels
+        if input_size is None:
+            self._input_size = None
+            self._input_height = None
+            self._input_width = None
             self._flat_size = None
+        else:
+            self._input_size = input_size
+            if isinstance(input_size, (tuple, list)):
+                if len(input_size) == 2:
+                    self._input_height, self._input_width = input_size
+                elif len(input_size) == 3:
+                    self._input_height, self._input_width, self._input_channels = input_size
+                else:
+                    raise ValueError(f'Invalid input_size {input_size}.')
+            else:
+                self._input_height = input_size
+                self._input_width = input_size
+            if self._padding == 'SAME':
+                self._output_height = math.ceil(self._input_height / self._stride_height)
+                self._output_width = math.ceil(self._input_width / self._stride_width)
+            else:
+                self._output_height = math.ceil((self._input_height - self._filter_height + 1) / self._stride_height)
+                self._output_width = math.ceil((self._input_width - self._filter_width + 1) / self._stride_width)
+            self._flat_size = self._output_height * self._output_width * output_channels
+
         super(Conv2D, self).__init__(name)
 
     @property
     def input_size(self):
-        return self._input_height, self._input_width
+        return self._input_size
 
     @property
     def input_height(self):
@@ -91,16 +113,16 @@ class Conv2D(common.Widget):
         return self._input_channels
 
     @property
+    def output_size(self):
+        return self._output_height, self._output_width
+
+    @property
     def output_height(self):
         return self._output_height
 
     @property
     def output_width(self):
         return self._output_width
-
-    @property
-    def output_size(self):
-        return self._output_height, self._output_width, self._output_channels
 
     @property
     def output_channels(self):
@@ -155,16 +177,6 @@ class Conv2D(common.Widget):
         return self._b
 
     def _setup(self, x, name='out'):
-        """Setup 2D convolutional layer.
-
-        Args:
-            x (tf.Tensor): Input tensor.
-            name (str): Output name.
-
-        Returns:
-            tf.Tensor: Output tensor.
-
-        """
         if self._use_bias:
             y = tf.nn.conv2d(
                 input=x,
@@ -180,6 +192,182 @@ class Conv2D(common.Widget):
                 filter=self._w,
                 strides=[1, self._stride_height, self._stride_width, 1],
                 padding=self._padding,
+                data_format='NHWC',
+                name=name
+            )
+        return y
+
+
+class Deconv2D(common.Widget):
+
+    def __init__(self,
+                 name,
+                 input_channels=None,
+                 output_channels=None,
+                 filter_size=None,
+                 stride_size=None,
+                 input_size=None,
+                 filter_height=None, filter_width=None,
+                 stride_height=None, stride_width=None,
+                 use_bias=True,
+                 w_init=init.TruncatedNormal(),
+                 b_init=init.Zeros()):
+        ################################################################################
+        # filter and stride
+        ################################################################################
+        self._filter_height, self._filter_width = filter_height, filter_width
+        if filter_size is not None:
+            if isinstance(filter_size, (tuple, list)):
+                assert len(filter_size) == 2
+                self._filter_height, self._filter_width = filter_size
+            else:
+                self._filter_height = self._filter_width = filter_size
+        if self._filter_height is None or self._filter_width is None:
+            raise ValueError(f'Invalid filter: height={self._filter_height}, width={self._filter_width}.')
+
+        self._stride_height, self._stride_width = stride_height, stride_width
+        if stride_size is not None:
+            if isinstance(stride_size, (tuple, list)):
+                assert len(stride_size) == 2
+                self._stride_height, self._stride_width = stride_size
+            else:
+                self._stride_height = self._stride_width = stride_size
+        if self._stride_height is None or self._stride_width is None:
+            raise ValueError(f'Invalid stride: height={self._stride_height}, width={self._stride_width}.')
+
+        ################################################################################
+        # misc
+        ################################################################################
+        # TODO: now it only support the "SAME" padding method
+        self._use_bias = use_bias
+        self._w_init = w_init
+        self._b_init = b_init
+
+        ################################################################################
+        # input_size and output_size
+        ################################################################################
+        self._input_channels = input_channels
+        self._output_channels = output_channels
+        if input_size is None:
+            self._input_size = None
+            self._input_height = None
+            self._input_width = None
+            self._flat_size = None
+        else:
+            self._input_size = input_size
+            if isinstance(input_size, (tuple, list)):
+                assert len(input_size) == 2
+                self._input_height, self._input_width = input_size
+            else:
+                self._input_height = input_size
+                self._input_width = input_size
+                self._output_height = self._input_height * self._stride_height
+                self._output_width = self._input_width * self._stride_width
+
+        super(Deconv2D, self).__init__(name)
+
+    @property
+    def input_size(self):
+        return self._input_size
+
+    @property
+    def input_height(self):
+        return self._input_height
+
+    @property
+    def input_width(self):
+        return self._input_width
+
+    @property
+    def input_channels(self):
+        return self._input_channels
+
+    @property
+    def output_size(self):
+        return self._output_height, self._output_width
+
+    @property
+    def output_height(self):
+        return self._output_height
+
+    @property
+    def output_width(self):
+        return self._output_width
+
+    @property
+    def output_channels(self):
+        return self._output_channels
+
+    @property
+    def filter_height(self):
+        return self._filter_height
+
+    @property
+    def filter_width(self):
+        return self._filter_width
+
+    @property
+    def stride_height(self):
+        return self._stride_height
+
+    @property
+    def stride_width(self):
+        return self._stride_width
+
+    def _build(self):
+        self._w = self._variable(
+            name='w',
+            initializer=self._w_init,
+            shape=(
+                self._filter_height,
+                self._filter_width,
+                self._output_channels,
+                self._input_channels
+            ),
+            dtype=conf.dtype
+        )
+        if self._use_bias:
+            self._b = self._variable(
+                name='b',
+                initializer=self._b_init,
+                shape=(self._output_channels,),
+                dtype=conf.dtype
+            )
+
+    @property
+    def w(self):
+        return self._w
+
+    @property
+    def b(self):
+        return self._b
+
+    def _setup(self, x, name='out'):
+        input_shape = tf.shape(x)
+        batch_size, input_height, input_width = input_shape[0], input_shape[1], input_shape[2]
+        output_shape = (
+            batch_size,
+            input_height * self._stride_height,
+            input_width * self._stride_width,
+            self._output_channels
+        )
+        if self._use_bias:
+            y = tf.nn.conv2d_transpose(
+                value=x,
+                filter=self._w,
+                output_shape=output_shape,
+                strides=[1, self._stride_height, self._stride_width, 1],
+                padding='SAME',
+                data_format='NHWC'
+            )
+            y = tf.add(y, self._b, name=name)
+        else:
+            y = tf.nn.conv2d_transpose(
+                value=x,
+                filter=self._w,
+                output_shape=output_shape,
+                strides=[1, self._stride_height, self._stride_width, 1],
+                padding='SAME',
                 data_format='NHWC',
                 name=name
             )

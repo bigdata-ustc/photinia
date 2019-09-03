@@ -4,6 +4,7 @@
 @author: xi, anmx
 @since: 2017-04-23
 """
+import os
 
 import numpy as np
 import tensorflow as tf
@@ -121,3 +122,27 @@ def get_basename(name):
     if index_ == -1:
         index_ = len(name)
     return name[index + 1: index_]
+
+
+def save_as_pb(file,
+               outputs,
+               as_text=False,
+               var_to_const=False):
+    if not isinstance(outputs, (list, tuple)):
+        outputs = [outputs]
+    outputs = [output.name[:-2] for output in outputs]
+    graph_def = tf.get_default_graph().as_graph_def()
+    if var_to_const:
+        sub_graph = tf.graph_util.convert_variables_to_constants(
+            ph.get_session(),
+            graph_def,
+            outputs
+        )
+    else:
+        sub_graph = tf.graph_util.extract_sub_graph(graph_def, outputs)
+    tf.io.write_graph(
+        sub_graph,
+        os.path.dirname(file),
+        os.path.basename(file),
+        as_text=as_text
+    )

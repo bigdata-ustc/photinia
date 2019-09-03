@@ -434,3 +434,178 @@ class LSTMCell(common.Widget):
             cell_state = activation(cell_state)
         state = tf.multiply(output_gate, cell_state, name='state')
         return cell_state, state
+
+
+class GRU(common.Widget):
+
+    def __init__(self,
+                 name,
+                 input_size,
+                 state_size,
+                 activation=tf.nn.tanh):
+        """The recurrent neural network with GRU cell.
+        All sequence shapes follow (batch_size, seq_len, state_size).
+
+        Args:
+            name (str): The widget name.
+            input_size: The input size.
+            state_size: The state size.
+            activation: The activation function for the GRU cell.
+
+        """
+        self._input_size = input_size
+        self._state_size = state_size
+        self._activation = activation
+        super(GRU, self).__init__(name)
+
+    @property
+    def input_size(self):
+        return self._input_size
+
+    @property
+    def state_size(self):
+        return self._state_size
+
+    @property
+    def output_size(self):
+        return self._state_size
+
+    def _build(self):
+        self._cell = GRUCell(
+            'cell',
+            input_size=self._input_size,
+            state_size=self._state_size
+        )
+
+    def _setup(self,
+               seq,
+               init_state=None,
+               name='states'):
+        """Setup a sequence.
+
+        Args:
+            seq: The sequences.
+                shape = (batch_size, seq_len, input_size)
+            init_state: The initial state.
+                shape = (batch_size, state_size)
+
+        Returns:
+            The forward states.
+                shape = (batch_size, seq_len, state_size)
+
+        """
+        # check forward and backward initial states
+        if init_state is None:
+            batch_size = tf.shape(seq)[0]
+            init_state = tf.zeros(shape=(batch_size, self._state_size), dtype=conf.dtype)
+
+        # connect
+        states_forward = tf.scan(
+            fn=lambda acc, elem: self._cell.setup(elem, acc, activation=self._activation),
+            elems=tf.transpose(seq, [1, 0, 2]),
+            initializer=init_state
+        )
+        states_forward = tf.transpose(states_forward, [1, 0, 2], name=name)
+
+        return states_forward
+
+
+class BiGRU(common.Widget):
+
+    def __init__(self,
+                 name,
+                 input_size,
+                 state_size,
+                 activation=tf.nn.tanh):
+        """A very simple BiGRU structure comes from zhkun.
+        All sequence shapes follow (batch_size, seq_len, state_size).
+
+        Args:
+            name (str): The widget name.
+            input_size: The input size.
+            state_size: The state size.
+            activation: The activation function for the GRU cell.
+
+        """
+        self._input_size = input_size
+        self._state_size = state_size
+        self._activation = activation
+        super(BiGRU, self).__init__(name)
+
+    @property
+    def input_size(self):
+        return self._input_size
+
+    @property
+    def state_size(self):
+        return self._state_size
+
+    @property
+    def output_size(self):
+        return self._state_size
+
+    def _build(self):
+        self._cell_forward = GRUCell(
+            'cell_forward',
+            input_size=self._input_size,
+            state_size=self._state_size
+        )
+        self._cell_backward = GRUCell(
+            'cell_backward',
+            input_size=self._input_size,
+            state_size=self._state_size
+        )
+
+    def _setup(self,
+               seq,
+               init_state=None,
+               name='states'):
+        """Setup a sequence.
+
+        Args:
+            seq: A sequence or a pair of sequences.
+                shape = (batch_size, seq_len, input_size)
+            init_state: A tensor or a pair of tensors.
+
+        Returns:
+            The forward states and the backward states.
+                shape = (batch_size, seq_len, state_size)
+
+        """
+        # check forward and backward sequences
+        if isinstance(seq, (tuple, list)):
+            if len(seq) != 2:
+                raise ValueError('The seqs should be tuple with 2 elements.')
+            seq_forward, seq_backward = seq
+        else:
+            seq_forward = seq
+            seq_backward = tf.reverse(seq, axis=[1])
+
+        # check forward and backward initial states
+        if init_state is None:
+            batch_size = tf.shape(seq_forward)[0]
+            init_state_forward = tf.zeros(shape=(batch_size, self._state_size), dtype=conf.dtype)
+            init_state_backward = tf.zeros(shape=(batch_size, self._state_size), dtype=conf.dtype)
+        elif isinstance(init_state, (tuple, list)):
+            if len(seq) != 2:
+                raise ValueError('The init_states should be tuple with 2 elements.')
+            init_state_forward, init_state_backward = init_state
+        else:
+            init_state_forward = init_state
+            init_state_backward = init_state
+
+        # connect
+        states_forward = tf.scan(
+            fn=lambda acc, elem: self._cell_forward.setup(elem, acc, activation=self._activation),
+            elems=tf.transpose(seq_forward, [1, 0, 2]),
+            initializer=init_state_forward
+        )
+        states_forward = tf.transpose(states_forward, [1, 0, 2], name=f'{name}_forward')
+        states_backward = tf.scan(
+            fn=lambda acc, elem: self._cell_backward.setup(elem, acc, activation=self._activation),
+            elems=tf.transpose(seq_backward, [1, 0, 2]),
+            initializer=init_state_backward
+        )
+        states_backward = tf.transpose(states_backward, [1, 0, 2], name=f'{name}_backward')
+
+        return states_forward, states_backward

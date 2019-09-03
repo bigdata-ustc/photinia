@@ -20,12 +20,14 @@ class BatchNorm(common.Widget):
     def __init__(self,
                  name,
                  size,
-                 is_training=True,
+                 is_train,
+                 decay=0.99,
                  beta_init=init.Zeros(),
                  gamma_init=init.Ones(),
-                 epsilon=1e-5):
+                 epsilon=1e-7):
         self._size = size
-        self._is_training = is_training
+        self._is_train = is_train
+        self._decay = decay
         self._beta_init = beta_init
         self._gamma_init = gamma_init
         self._epsilon = epsilon
@@ -68,28 +70,26 @@ class BatchNorm(common.Widget):
         )
         self._variance = self._variable(
             'variance',
-            initializer=init.Zeros(),
+            initializer=init.Ones(),
             shape=(self._size,),
             dtype=conf.float
         )
 
     def _setup(self,
                x,
-               is_training=None,  # TODO: deprecated
                axis=-1,
                name='out'):
-        if is_training is not None:
-            self._is_training = is_training
-            print('Deprecated argument "is_training". Use it in the constructor.')
-
-        if isinstance(self._is_training, bool):
-            if self._is_training:
+        if isinstance(self._is_train, bool):
+            if self._is_train:
                 return self._setup_for_train(x, axis, name)
             else:
                 return self._setup_for_predict(x, name)
         else:
+            # Here, "tf.where" cannot be used since it will trigger both train and predict branches.
+            # Any Tensors or Operations created outside of true_fn and false_fn will be executed regardless of which
+            # branch is selected at runtime.
             return tf.cond(
-                self._is_training,
+                self._is_train,
                 lambda: self._setup_for_train(x, axis, None),
                 lambda: self._setup_for_predict(x, None),
                 name=name
@@ -101,12 +101,22 @@ class BatchNorm(common.Widget):
         else:
             axes = tuple(i for i in range(len(x.shape)) if i != axis)
         mean, variance = tf.nn.moments(x=x, axes=axes)
-        update_mean = tf.assign(self._mean, (self._mean + mean) * 0.5)
-        update_variance = tf.assign(self._variance, (self._variance + variance) * 0.5)
+
+        d1 = self._decay
+        d2 = 1.0 - d1
+        update_mean = tf.assign(
+            self._mean,
+            tf.multiply(d1, self._mean) + tf.multiply(d2, mean)
+        )
+        update_variance = tf.assign(
+            self._variance,
+            tf.multiply(d1, self._variance) + tf.multiply(d2, variance)
+        )
         with tf.control_dependencies([update_mean, update_variance]):
             mean = tf.identity(mean)
             variance = tf.identity(variance)
-        y = tf.nn.batch_normalization(
+
+        return tf.nn.batch_normalization(
             x=x,
             mean=mean,
             variance=variance,
@@ -115,10 +125,9 @@ class BatchNorm(common.Widget):
             variance_epsilon=self._epsilon,
             name=name
         )
-        return y
 
     def _setup_for_predict(self, x, name):
-        y = tf.nn.batch_normalization(
+        return tf.nn.batch_normalization(
             x=x,
             mean=tf.stop_gradient(self._mean),
             variance=tf.stop_gradient(self._variance),
@@ -127,7 +136,6 @@ class BatchNorm(common.Widget):
             variance_epsilon=self._epsilon,
             name=name
         )
-        return y
 
     @property
     def beta(self):
@@ -136,6 +144,52 @@ class BatchNorm(common.Widget):
     @property
     def gamma(self):
         return self._gamma
+
+
+class LayerNorm(common.Widget):
+
+    def __init__(self,
+                 name,
+                 size,
+                 eps=1e-7):
+        self._name = name
+        self._size = size
+        self._eps = eps
+        super(LayerNorm, self).__init__(name)
+
+    @property
+    def size(self):
+        return self._size
+
+    def _build(self):
+        self._w = self._variable(
+            name='w',
+            initializer=init.Ones(),
+            shape=(self._size,),
+            dtype=conf.float
+        )
+        self._b = self._variable(
+            name='b',
+            initializer=init.Zeros(),
+            shape=(self._size,),
+            dtype=conf.float
+        )
+
+    def _setup(self, x, name='out'):
+        """Setup for a tensor.
+
+        Args:
+            x: A tensor whose last dimension should be equal to "size".
+            name (str): The output name.
+
+        Returns:
+            A tensor which has the same shape as "x".
+
+        """
+        mean, var = tf.nn.moments(x, axes=-1, keep_dims=True)
+        normalized = (x - mean) / tf.sqrt(var + self._eps)
+        result = tf.add(self._w * normalized, self._b, name=name)
+        return result
 
 
 class SoftAttention(common.Widget):

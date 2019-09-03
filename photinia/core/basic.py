@@ -86,12 +86,11 @@ class Linear(common.Widget):
     def b(self):
         return self._b
 
-    def _setup(self, x, axis=-1, name='out', axes=None):
+    def _setup(self, x, name='out'):
         """Setup the layer.
 
         Args:
             x (tf.Tensor): Input tensor.
-            axis (int): If the order of "x" is larger than 2, the layer will perform tensor dot.
             name (str): Output name.
 
         Returns:
@@ -102,24 +101,37 @@ class Linear(common.Widget):
             if len(x.shape) == 2:
                 y = tf.matmul(x, self._w)
             else:
-                if axes is None:
-                    axes = [(axis,), (0,)]
-                y = tf.tensordot(x, self._w, axes=axes)
+                y = self._matmul(x)
             y = tf.add(y, self._b, name=name)
         else:
             if len(x.shape) == 2:
                 y = tf.matmul(x, self._w, name=name)
             else:
-                if axes is None:
-                    axes = [(axis,), (0,)]
-                y = tf.tensordot(x, self._w, axes=axes, name=name)
+                y = self._matmul(x, name=name)
         return y
 
+    def _matmul(self, x, name=None):
+        #    [?_1, ?_2, ..., ?_n, input_size]
+        # -> [?, input_size]
+        x_mat = tf.reshape(x, [-1, self._input_size])
+        #    [?, input_size] @ [input_size, output_size]
+        # -> [?, output_size]
+        y_mat = tf.matmul(x_mat, self._w)
+        # -> [?_1, ?_2, ..., ?_{n-1} output_size]
+        shape = tf.shape(x)
+        shape = tf.unstack(shape)
+        shape[-1] = self._output_size
+        shape = tf.stack(shape)
+        y = tf.reshape(y_mat, shape, name=name)
+        return y
 
 
 class Dropout(common.Widget):
 
-    def __init__(self, name, keep_prob=None):
+    def __init__(self,
+                 name,
+                 keep_prob,
+                 is_train):
         """Dropout
 
         Args:
@@ -128,18 +140,20 @@ class Dropout(common.Widget):
 
         """
         self._keep_prob = keep_prob
+        self._rate = 1.0 - keep_prob
+        self._is_train = is_train
         super(Dropout, self).__init__(name)
 
     @property
     def keep_prob(self):
         return self._keep_prob
 
+    @property
+    def rate(self):
+        return self._rate
+
     def _build(self):
-        if self._keep_prob is None:
-            self._keep_prob = tf.placeholder(
-                shape=(),
-                dtype=conf.dtype
-            )
+        pass
 
     def _setup(self, x, name='out'):
         """Setup dropout.
@@ -152,6 +166,14 @@ class Dropout(common.Widget):
             tf.Tensor: Output tensor.
 
         """
-        return tf.nn.dropout(x, self._keep_prob, name=name)
-
-
+        if isinstance(self._is_train, bool):
+            if self._is_train:
+                return tf.nn.dropout(x, rate=self._rate, name=name)
+            else:
+                return x
+        else:
+            return tf.nn.dropout(
+                x,
+                rate=self._rate * tf.cast(self._is_train, conf.dtype),
+                name=name
+            )
