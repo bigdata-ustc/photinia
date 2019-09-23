@@ -6,14 +6,13 @@
 @since: 2016-11-11
 """
 
-import tensorflow as tf
-
 from . import common
 from .. import conf
 from .. import init
+from ..conf import tf
 
 
-class Linear(common.Widget):
+class Linear(common.Trainable):
     """Linear layer.
     y = wx + b
     """
@@ -23,7 +22,7 @@ class Linear(common.Widget):
                  input_size,
                  output_size,
                  with_bias=True,
-                 w_init=init.GlorotUniform(),
+                 w_init=init.GlorotNormal(),
                  b_init=init.Zeros()):
         """Linear layer.
 
@@ -38,12 +37,12 @@ class Linear(common.Widget):
             b_init (initializers.Initializer): Bias initializer.
 
         """
+        super(Linear, self).__init__(name)
         self._input_size = input_size
         self._output_size = output_size
         self._with_bias = with_bias
         self._w_init = w_init
         self._b_init = b_init
-        super(Linear, self).__init__(name)
 
     @property
     def input_size(self):
@@ -57,66 +56,39 @@ class Linear(common.Widget):
     def with_bias(self):
         return self._with_bias
 
-    def _build(self):
-        """Build the linear layer.
-        Two parameters: weight and bias.
-
-        """
-        self._w = self._variable(
+    def setup(self, x, name=None):
+        w = common.variable(
             name='w',
-            initializer=self._w_init,
-            shape=(self._input_size, self._output_size),
+            init_value=self._w_init.build(
+                name='w_init',
+                shape=[self._input_size, self._output_size]
+            ),
             dtype=conf.dtype,
+            trainable=True
         )
         if self._with_bias:
-            self._b = self._variable(
+            b = common.variable(
                 name='b',
-                initializer=self._b_init,
-                shape=(self._output_size,),
-                dtype=conf.dtype
+                init_value=self._b_init.build(
+                    name='b_init',
+                    shape=[self._output_size]
+                ),
+                dtype=conf.dtype,
+                trainable=True
             )
+            y = tf.matmul(x, w) if len(x.shape) == 2 else self._matmul(x, w)
+            y = tf.add(y, b, name=name)
         else:
-            self._b = None
-
-    @property
-    def w(self):
-        return self._w
-
-    @property
-    def b(self):
-        return self._b
-
-    def _setup(self, x, name='out'):
-        """Setup the layer.
-
-        Args:
-            x (tf.Tensor): Input tensor.
-            name (str): Output name.
-
-        Returns:
-            tf.Tensor: Output tensor.
-
-        """
-        if self._with_bias:
-            if len(x.shape) == 2:
-                y = tf.matmul(x, self._w)
-            else:
-                y = self._matmul(x)
-            y = tf.add(y, self._b, name=name)
-        else:
-            if len(x.shape) == 2:
-                y = tf.matmul(x, self._w, name=name)
-            else:
-                y = self._matmul(x, name=name)
+            y = tf.matmul(x, w, name=name) if len(x.shape) == 2 else self._matmul(x, w, name=name)
         return y
 
-    def _matmul(self, x, name=None):
+    def _matmul(self, x, w, name=None):
         #    [?_1, ?_2, ..., ?_n, input_size]
         # -> [?, input_size]
         x_mat = tf.reshape(x, [-1, self._input_size])
         #    [?, input_size] @ [input_size, output_size]
         # -> [?, output_size]
-        y_mat = tf.matmul(x_mat, self._w)
+        y_mat = tf.matmul(x_mat, w)
         # -> [?_1, ?_2, ..., ?_{n-1} output_size]
         shape = tf.shape(x)
         shape = tf.unstack(shape)
@@ -126,7 +98,7 @@ class Linear(common.Widget):
         return y
 
 
-class Dropout(common.Widget):
+class Dropout(common.Trainable):
 
     def __init__(self,
                  name,
@@ -139,10 +111,10 @@ class Dropout(common.Widget):
             keep_prob (float|tf.Tensor): Keep probability.
 
         """
+        super(Dropout, self).__init__(name)
         self._keep_prob = keep_prob
         self._rate = 1.0 - keep_prob
         self._is_train = is_train
-        super(Dropout, self).__init__(name)
 
     @property
     def keep_prob(self):
@@ -152,10 +124,7 @@ class Dropout(common.Widget):
     def rate(self):
         return self._rate
 
-    def _build(self):
-        pass
-
-    def _setup(self, x, name='out'):
+    def setup(self, x, name='out'):
         """Setup dropout.
 
         Args:

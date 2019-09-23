@@ -14,9 +14,9 @@ import threading
 
 import numpy as np
 import prettytable
-import tensorflow as tf
 
 from . import common
+from ..conf import tf
 
 
 def shell(fn):
@@ -245,12 +245,11 @@ class Application(object):
     @shell
     def widgets(self, prefix=''):
         """List widgets."""
-        with common.Trainable.instance_lock:
-            widget_list = self._widget_list = [
-                (name, widget)
-                for name, widget in common.Trainable.instance_dict.items()
-                if name.startswith(prefix)
-            ]
+        widget_list = self._widget_list = [
+            (name, widget)
+            for name, widget in common._TRAINABLE_DICT.items()
+            if name.startswith(prefix)
+        ]
         # widget_list.sort(key=lambda a: a[0])
         table = prettytable.PrettyTable(['#', 'Name', 'Type'])
         for i, (name, widget) in enumerate(widget_list, 1):
@@ -269,8 +268,7 @@ class Application(object):
                 return
         elif isinstance(widget_id, str):
             try:
-                with common.Trainable.instance_lock:
-                    return common.Trainable.instance_dict[widget_id]
+                return common._TRAINABLE_DICT[widget_id]
             except KeyError:
                 print('No such widget.', file=sys.stderr)
                 return

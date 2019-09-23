@@ -16,8 +16,5 @@ from . import train
 
 from . import utils
 
-from . import dnn
 from . import cnn
-from . import rnn
 from . import att
-from . import misc

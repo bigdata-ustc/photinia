@@ -6,9 +6,11 @@
 """
 
 import numpy as np
-import tensorflow as tf
 
 from . import conf
+from .conf import tf
+
+_INIT_DICT = {}
 
 
 class Initializer(object):
@@ -18,15 +20,19 @@ class Initializer(object):
     def _build(self, shape, name, seed):
         raise NotImplementedError()
 
-    def build(self, shape, name=None, seed=None):
-        if name is None:
-            return self._build(shape, name, seed)
+    def build(self, shape, name, seed=None):
+        if not isinstance(name, str):
+            raise ValueError('Name of initializer must be specified with string.')
+        if len(name.strip()) != len(name) or name == '':
+            raise ValueError('Name of initializer cannot be empty or contain space characters.')
+        scope = tf.get_default_graph().get_name_scope()
+        full_name = f'{scope}/{name}' if scope else name
+        if full_name in _INIT_DICT:
+            instance = _INIT_DICT[full_name]
         else:
-            if not isinstance(name, str):
-                raise ValueError('Name of initializer must be specified with string.')
-            if len(name.strip()) != len(name) or name == '':
-                raise ValueError('Name of initializer cannot be empty or contain space characters.')
-            return self._build(shape, name, seed)
+            instance = self._build(shape, name, seed)
+            _INIT_DICT[full_name] = instance
+        return instance
 
 
 class Zeros(Initializer):

@@ -4,10 +4,10 @@
 @author: xi, anmx
 @since: 2017-04-23
 """
-import os
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.platform import gfile
 
 import photinia as ph
 
@@ -110,7 +110,7 @@ def get_tensor(name):
 def get_variable(name):
     if name.rfind(':') == -1:
         name += ':0'
-    for var in tf.get_local_variable():
+    for var in tf.global_variables():
         if name == var.name:
             return var
     return None
@@ -124,25 +124,47 @@ def get_basename(name):
     return name[index + 1: index_]
 
 
-def save_as_pb(file,
-               outputs,
-               as_text=False,
-               var_to_const=False):
-    if not isinstance(outputs, (list, tuple)):
-        outputs = [outputs]
-    outputs = [output.name[:-2] for output in outputs]
-    graph_def = tf.get_default_graph().as_graph_def()
-    if var_to_const:
-        sub_graph = tf.graph_util.convert_variables_to_constants(
-            ph.get_session(),
-            graph_def,
-            outputs
-        )
-    else:
-        sub_graph = tf.graph_util.extract_sub_graph(graph_def, outputs)
-    tf.io.write_graph(
-        sub_graph,
-        os.path.dirname(file),
-        os.path.basename(file),
-        as_text=as_text
-    )
+def dump_graph(names_dest_nodes, name_init_op=None):
+    """Dump a sub graph
+
+    Args:
+        names_dest_nodes (list[str]|tuple[str]): Name of the destination (operation) nodes.
+        name_init_op (str): Name of the init operation of the variables.
+
+    Returns:
+        GraphDef.
+
+    """
+    if not isinstance(names_dest_nodes, (list, tuple)):
+        names_dest_nodes = [names_dest_nodes]
+
+    graph = tf.get_default_graph().as_graph_def()
+    if name_init_op is not None:
+        sub_graph_def = tf.graph_util.extract_sub_graph(graph, names_dest_nodes)
+        names_in_graph = set(_node.name for _node in sub_graph_def.node)
+        var_list = [
+            _var for _var in tf.global_variables()
+            if _var.op.name in names_in_graph
+        ]
+        value_list = read_variables(var_list)
+        assign_list = [
+            tf.assign(_var, _value)
+            for _var, _value in zip(var_list, value_list)
+        ]
+        with tf.control_dependencies(assign_list):
+            init_op = tf.no_op(name=name_init_op)
+        names_dest_nodes.append(init_op.name)
+
+    return tf.graph_util.extract_sub_graph(graph, names_dest_nodes)
+
+
+def write_graph_def(pb_file, graph_def):
+    """Write GraphDef object to pb file.
+
+    Args:
+        pb_file (str): Full path of the prorobuf file.
+        graph_def: GraphDef object.
+
+    """
+    with gfile.GFile(pb_file, 'wb') as f:
+        f.write(graph_def.SerializeToString())

@@ -7,7 +7,7 @@
 
 import collections
 
-import tensorflow as tf
+from .conf import tf
 
 
 class Regularizer(object):

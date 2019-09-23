@@ -8,17 +8,14 @@
 
 import collections
 import os
-import re
 import sys
-import threading
 
 import numpy as np
-import tensorflow as tf
 
 from .. import conf
-from .. import init
 from .. import io
 from .. import ops
+from ..conf import tf
 
 
 class __GlobalContext(object):
@@ -51,11 +48,11 @@ TF_LOG_NO_WARN = '2'
 TF_LOG_NONE = '3'
 
 
-def get_tf_log_level():
+def get_log_level():
     return os.environ['TF_CPP_MIN_LOG_LEVEL']
 
 
-def set_tf_log_level(level):
+def set_log_level(level):
     if level not in ('0', '1', '2', '3'):
         raise ValueError(
             'level should be one of {'
@@ -79,6 +76,15 @@ def initialize_global_variables():
     __GLOBAL.session.run(tf.global_variables_initializer())
 
 
+def get_name_scope():
+    return tf.get_default_graph().get_name_scope()
+
+
+def get_full_name(name):
+    scope = get_name_scope()
+    return f'{scope}/{name}' if scope else name
+
+
 def deprecated(message):
     def _decorator(fn):
         def _fn(*args, **kwargs):
@@ -90,40 +96,34 @@ def deprecated(message):
     return _decorator
 
 
+_VAR_DICT = {}
+_PLACEHOLDER_DICT = {}
+_TRAINABLE_DICT = {}
+
+
 def variable(name,
-             initial_value,
-             dtype=conf.dtype,
+             init_value,
+             dtype,
              trainable=True):
-    """Create a variable.
-    Shortcut to "tf.Variable()".
-
-    Args:
-        name (str): Variable name.
-        initial_value: A `Tensor`, or Python object convertible to a `Tensor`,
-            which is the initial value for the Variable.
-        dtype (tf.DType): The type of elements in the tensor to be fed.
-        trainable (bool): If `True`, the default, also adds the variable to the graph collection
-            `GraphKeys.TRAINABLE_VARIABLES`.
-
-    Returns:
-        tf.Variable: The variable object.
-
-    Raises:
-        ValueError: If both `variable_def` and initial_value are specified.
-        ValueError: If the initial value is not specified, or does not have a shape and `validate_shape` is `True`.
-        RuntimeError: If eager execution is enabled.
-
-    """
-    return tf.Variable(
-        name=name,
-        initial_value=initial_value,
-        trainable=trainable,
-        dtype=dtype
-    )
+    full_name = get_full_name(name)
+    if full_name in _VAR_DICT:
+        instance = _VAR_DICT[full_name]
+        # if type(instance) is not tf.Variable:
+        #     raise TypeError()
+    else:
+        instance = tf.Variable(
+            initial_value=init_value,
+            dtype=dtype,
+            name=name,
+            trainable=trainable
+        )
+        _VAR_DICT[full_name] = instance
+    return instance
 
 
 def placeholder(name,
                 shape,
+                default_value=None,
                 dtype=conf.dtype):
     """Create a placeholder.
     Shortcut to "tf.placeholder()".
@@ -132,178 +132,76 @@ def placeholder(name,
         name (str): Name of the placeholder.
         shape (tuple|list): The shape of the tensor to be fed (optional). If the shape is not specified,
             you can feed a tensor of any shape.
+        default_value: A `Tensor`. The default value to produce when output is not fed.
         dtype (tf.DType): The type of elements in the tensor to be fed.
 
     Returns:
         The placeholder tensor.
 
     """
-    return tf.placeholder(name=name, shape=shape, dtype=dtype)
-
-
-class _ContextManager(object):
-
-    def __init__(self):
-        self._stack = list()
-
-    def push(self, context_dict):
-        stack = self._stack
-        if len(stack) > 0:
-            top = dict(stack[-1])
-            context_dict = top.update(context_dict)
-        stack.append(context_dict)
-
-    def pop(self):
-        return self._stack.pop()
-
-    def top(self):
-        return self._stack[-1] if len(self._stack) > 0 else None
-
-
-class _DictContext(dict):
-
-    def __init__(self, context_manager):
-        self._context_manager = context_manager
-        super(_DictContext, self).__init__()
-
-    def __enter__(self):
-        self._context_manager.push(self)
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._context_manager.pop()
-
-
-class Trainable(object):
-    """Trainable
-    A trainable object contains TensorFlow Variables.
-    """
-
-    instance_lock = threading.Semaphore(1)
-    instance_dict = collections.OrderedDict()
-
-    reuse_context = _ContextManager()
-
-    def __init__(self, name, build=True):
-        """Construct a widget.
-
-        Args:
-            name (str): Widget name.
-            build (bool): If the widget will be built during the construction.
-
-        """
-        if name is not None:
-            if not isinstance(name, str):
-                raise ValueError('Trainable name must be specified with string.')
-            if len(name.strip()) != len(name) or name == '':
-                raise ValueError('Trainable name cannot be empty or contain space characters.')
-        self._name = name
-
-        self._scope = ''
-        self._full_name = None
-        self._prefix = None
-        self._built = False
-        if build:
-            self.build()
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def built(self):
-        return self._built
-
-    def build(self):
-        """Build the widget.
-        The main purpose of this function is to create the trainable variables (parameters) for the widget.
-
-        """
-        if self._built:
-            return self
-        #
-        # Build WITH scope.
-        self._scope = tf.get_variable_scope().name
-        if self._scope == '':
-            self._full_name = self._name
+    full_name = get_full_name(name)
+    if full_name in _PLACEHOLDER_DICT:
+        instance = _PLACEHOLDER_DICT[full_name]
+    else:
+        if default_value is None:
+            instance = tf.placeholder(name=name, shape=shape, dtype=dtype)
         else:
-            if self._scope.endswith('/'):
-                self._full_name = self._scope + self._name
-            else:
-                self._full_name = '%s/%s' % (self._scope, self._name)
+            instance = tf.placeholder_with_default(input=default_value, shape=shape, name=name)
+        _PLACEHOLDER_DICT[full_name] = instance
+    return instance
+
+
+class _TrainableType(type):
+
+    def __call__(cls, name, *args, **kwargs):
+        scope = get_name_scope()
+        full_name = f'{scope}/{name}' if scope else name
+        if full_name in _TRAINABLE_DICT:
+            instance = _TRAINABLE_DICT[full_name]
+            if type(instance) is not cls:
+                raise TypeError()
+        else:
+            instance = super(_TrainableType, cls).__call__(
+                (name, scope, full_name),
+                *args,
+                **kwargs
+            )
+            setattr(instance, '__init_args__', args)
+            setattr(instance, '__init_kwargs__', kwargs)
+            _TRAINABLE_DICT[full_name] = instance
+        return instance
+
+
+class Trainable(object, metaclass=_TrainableType):
+
+    def __init__(self, name, *args, **kwargs):
+        self._name, self._scope, self._full_name = name
         self._prefix = self._full_name + '/'
 
-        with tf.variable_scope(self._name):
-            self._build()
-            self._built = True
+        if hasattr(self, '_build'):
+            # make this object compatible with the legacy "build -> setup" interface
+            _build = getattr(self, '_build')
+            with tf.name_scope(self._full_name + '/'):
+                _build()
+            if hasattr(self, '_setup'):
+                # build setup mode
+                self._setup_impl = getattr(self, '_setup')
+                self.setup = self._setup_wrapper
+            else:
+                # build only mode
+                self._setup_impl = self.setup
+                self.setup = self._setup_wrapper
+        else:
+            # this is new "setup only" interface
+            self._setup_impl = self.setup
+            self.setup = self._setup_wrapper
 
-        with self.instance_lock:
-            if self._full_name in self.instance_dict:
-                raise ValueError('Duplicated trainable name %s.' % self._full_name)
-            self.instance_dict[self._full_name] = self
-        return self
+    def setup(self, *args, **kwargs):
+        pass
 
-    def _build(self):
-        """Build the widget.
-        Abstract method.
-        All subclass must implement this method.
-
-        There is one task to be done in this method:
-        1) Create the parameters (trainable variables) for the widget.
-
-        """
-        raise NotImplementedError()
-
-    def _variable(self,
-                  name,
-                  initializer,
-                  shape,
-                  dtype=conf.dtype,
-                  trainable=True,
-                  lookup=True):
-        """Create a variable.
-        Shortcut to "tf.Variable()".
-
-        Args:
-            name (str): Variable name.
-            initializer (init.Initializer): An initializer used to initial the variable.
-                Note that create an initializer does not create any Tensors on the graph.
-                To create a Tensor, initializer.build() should be called.
-            shape (tuple|list): Variable shape.
-            dtype: Data type.
-            trainable (bool): If `True`, the default, also adds the variable to the graph collection
-                `GraphKeys.TRAINABLE_VARIABLES`.
-            lookup (bool): Look up reuse_dict first?
-
-        Returns:
-            tf.Variable: The variable object.
-
-        """
-        var_ = self._variable_lookup(name) if lookup else None
-        return tf.Variable(
-            name=name,
-            initial_value=initializer.build(shape=shape, name='init_' + name),
-            dtype=dtype,
-            trainable=trainable
-        ) if var_ is None else var_
-
-    def _variable_lookup(self, name):
-        """Lookup existing variable from the given var_dict.
-
-        Args:
-            name (str): Relative variable name. (Not a full name or absolute path.)
-
-        Returns:
-            Tensor or Variable if the required variable exists in the var_dict.
-
-        """
-        reuse_dict = self.reuse_context.top()
-        if reuse_dict:
-            if name.rfind(':') == -1:
-                name += ':0'
-            full_name = self._prefix + name
-            return reuse_dict.get(full_name)
-        return None
+    def _setup_wrapper(self, *args, **kwargs):
+        with tf.name_scope(self._prefix):
+            return self._setup_impl(*args, **kwargs)
 
     def get_variables(self):
         """Get variables(tensors) of the widget.
@@ -447,11 +345,10 @@ class Trainable(object):
 
     def __getitem__(self, name):
         name = self._prefix + name
-        with self.instance_lock:
-            if name in self.instance_dict:
-                instance = self.instance_dict[name]
-                if isinstance(instance, Trainable):
-                    return instance
+        if name in _TRAINABLE_DICT:
+            instance = _TRAINABLE_DICT[name]
+            if isinstance(instance, Trainable):
+                return instance
 
         if name.rfind(':') == -1:
             name += ':0'
@@ -467,38 +364,6 @@ class Model(Trainable):
         raise NotImplementedError()
 
 
-class ReuseContext(_DictContext):
-
-    def __init__(self, tensors=None, alias=None):
-        """Reuse dict.
-
-        Args:
-            tensors (dict): Name -> Tensor map.
-            alias (dict[str, str]): Alisa dict.
-
-        """
-        super(ReuseContext, self).__init__(Trainable.reuse_context)
-        if tensors:
-            self.add(tensors, alias)
-
-    def add(self, tensors, alias):
-        """
-
-        Args:
-            tensors (dict): Name -> Tensor map.
-            alias (dict[str, str]): Alisa dict.
-
-        """
-        alias = [
-            ('^' + old, new)
-            for old, new in alias.items()
-        ] if alias is not None else list()
-        for name, tensor in tensors.items():
-            for old, new in alias:
-                name = re.sub(old, new, name)
-            self[name] = tensor
-
-
 class Widget(Trainable):
     """Widget
     The basic component to form a model.
@@ -507,41 +372,6 @@ class Widget(Trainable):
 
     def _build(self):
         raise NotImplementedError()
-
-    def setup(self, *args, **kwargs):
-        """Setup the widget.
-        "Setup" means to create a new series of operator in the TF graph, which can be called a "path".
-        No matter how many paths be created, the number of trainable variables is (and of course cannot) be changed.
-        They share the same parameters of the widget.
-
-        """
-        if not self._built:
-            raise RuntimeError('This widget has not been built. Please build first.')
-        if self._name is None:
-            #
-            # Setup only WITHOUT scope.
-            return self._setup(*args, **kwargs)
-        else:
-            #
-            # Setup only WITH scope.
-            with tf.variable_scope(self._prefix):
-                return self._setup(*args, **kwargs)
-
-    def _setup(self, *args, **kwargs):
-        """Setup the widget.
-        Abstract method.
-        All subclass must implement this method.
-
-        There is one task to be done in this method:
-        1) Construct the model's graph structure with TF.
-
-        In this method, you CANNOT create any trainable variables.
-
-        """
-        raise NotImplementedError()
-
-    def __call__(self, *args, **kwargs):
-        return self.setup(*args, **kwargs)
 
 
 def setup(x, widget_list):

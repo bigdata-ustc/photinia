@@ -8,8 +8,8 @@
 from .common import *
 
 from .basic import *
-from .embedding import *
-from .convolutional import *
+from .embed import *
+from .conv import *
 from .recurrent import *
 from .misc import *
 

@@ -8,11 +8,11 @@ import collections
 import math
 
 import numpy as np
-import tensorflow as tf
 
 from . import conf
 from . import core
 from . import init
+from .conf import tf
 
 
 class AccCalculator(object):

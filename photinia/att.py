@@ -5,9 +5,8 @@
 @since: 2019-01-30
 """
 
-import tensorflow as tf
-
 import photinia as ph
+from photinia.conf import tf
 
 
 class MLPAttention(ph.Widget):
@@ -300,18 +299,24 @@ class BiLinearAttention(ph.Widget):
         if self._query_vec_size is None and self._query_seq_size is None:
             raise ValueError('You should set at least one of "query_vec_size" or "query_seq_size".')
         if self._query_vec_size is not None:
-            self._w_vec = self._variable(
+            self._w_vec = ph.variable(
                 'w_vec',
-                initializer=self._w_init,
-                shape=(self._query_vec_size, self._key_size),
-                dtype=ph.float
+                init_value=self._w_init.build(
+                    name='w_vec_init',
+                    shape=(self._query_vec_size, self._key_size)
+                ),
+                dtype=ph.float,
+                trainable=True
             )
         if self._query_seq_size is not None:
-            self._w_seq = self._variable(
+            self._w_seq = ph.variable(
                 'w_seq',
-                initializer=self._w_init,
-                shape=(self._query_seq_size, self._key_size),
-                dtype=ph.float
+                init_value=self._w_init.build(
+                    name='w_seq_init',
+                    shape=(self._query_seq_size, self._key_size)
+                ),
+                dtype=ph.float,
+                trainable=True
             )
 
     def _setup(self,
