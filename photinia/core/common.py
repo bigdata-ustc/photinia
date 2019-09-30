@@ -106,6 +106,12 @@ def variable(name,
              dtype,
              trainable=True):
     full_name = get_full_name(name)
+    try:
+        op = tf.get_default_graph().get_operation_by_name(full_name)
+        outputs = op.outputs
+        return outputs[0] if len(outputs) == 1 else outputs
+    except KeyError:
+        pass
     if full_name in _VAR_DICT:
         instance = _VAR_DICT[full_name]
         # if type(instance) is not tf.Variable:
@@ -123,8 +129,8 @@ def variable(name,
 
 def placeholder(name,
                 shape,
-                default_value=None,
-                dtype=conf.dtype):
+                dtype=conf.dtype,
+                default_value=None):
     """Create a placeholder.
     Shortcut to "tf.placeholder()".
 
@@ -132,14 +138,20 @@ def placeholder(name,
         name (str): Name of the placeholder.
         shape (tuple|list): The shape of the tensor to be fed (optional). If the shape is not specified,
             you can feed a tensor of any shape.
-        default_value: A `Tensor`. The default value to produce when output is not fed.
         dtype (tf.DType): The type of elements in the tensor to be fed.
+        default_value: A `Tensor`. The default value to produce when output is not fed.
 
     Returns:
         The placeholder tensor.
 
     """
     full_name = get_full_name(name)
+    try:
+        op = tf.get_default_graph().get_operation_by_name(full_name)
+        outputs = op.outputs
+        return outputs[0] if len(outputs) == 1 else outputs
+    except KeyError:
+        pass
     if full_name in _PLACEHOLDER_DICT:
         instance = _PLACEHOLDER_DICT[full_name]
     else:
@@ -156,43 +168,35 @@ class _TrainableType(type):
     def __call__(cls, name, *args, **kwargs):
         scope = get_name_scope()
         full_name = f'{scope}/{name}' if scope else name
+        prefix = full_name + '/'
         if full_name in _TRAINABLE_DICT:
             instance = _TRAINABLE_DICT[full_name]
             if type(instance) is not cls:
                 raise TypeError()
         else:
             instance = super(_TrainableType, cls).__call__(
-                (name, scope, full_name),
+                (name, scope, full_name, prefix),
                 *args,
                 **kwargs
             )
             setattr(instance, '__init_args__', args)
             setattr(instance, '__init_kwargs__', kwargs)
             _TRAINABLE_DICT[full_name] = instance
+            if hasattr(instance, '_build'):
+                _build = getattr(instance, '_build')
+                with tf.name_scope(prefix):
+                    _build()
         return instance
 
 
 class Trainable(object, metaclass=_TrainableType):
 
     def __init__(self, name, *args, **kwargs):
-        self._name, self._scope, self._full_name = name
-        self._prefix = self._full_name + '/'
-
-        if hasattr(self, '_build'):
-            # make this object compatible with the legacy "build -> setup" interface
-            _build = getattr(self, '_build')
-            with tf.name_scope(self._full_name + '/'):
-                _build()
-            if hasattr(self, '_setup'):
-                # build setup mode
-                self._setup_impl = getattr(self, '_setup')
-                self.setup = self._setup_wrapper
-            else:
-                # build only mode
-                self._setup_impl = self.setup
-                self.setup = self._setup_wrapper
+        self._name, self._scope, self._full_name, self._prefix = name
+        if hasattr(self, '_setup'):
+            self._setup_impl = getattr(self, '_setup')
+            self.setup = self._setup_wrapper
         else:
-            # this is new "setup only" interface
             self._setup_impl = self.setup
             self.setup = self._setup_wrapper
 
@@ -359,19 +363,11 @@ class Trainable(object, metaclass=_TrainableType):
 
 
 class Model(Trainable):
-
-    def _build(self):
-        raise NotImplementedError()
+    pass
 
 
 class Widget(Trainable):
-    """Widget
-    The basic component to form a model.
-    This an abstract class which can only be inherited.
-    """
-
-    def _build(self):
-        raise NotImplementedError()
+    pass
 
 
 def setup(x, widget_list):

@@ -16,5 +16,4 @@ from . import train
 
 from . import utils
 
-from . import cnn
 from . import att

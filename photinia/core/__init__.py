@@ -8,9 +8,10 @@
 from .common import *
 
 from .basic import *
-from .embed import *
+from .norm import *
 from .conv import *
 from .recurrent import *
+from .embed import *
 from .misc import *
 
 from .application import *
