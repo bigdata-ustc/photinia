@@ -6,4 +6,5 @@
 """
 
 from .data import *
+from .adapter import *
 from .dumpers import *

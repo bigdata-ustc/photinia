@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-
-
+import collections
 import queue
+import random
 import threading
 
 
@@ -64,6 +64,49 @@ class ThreadedAdapter(Adapter):
         if doc is None:
             raise StopIteration()
         return doc
+
+
+class BatchAdapter(Adapter):
+
+    def __init__(self, iterable, batch_size):
+        super(BatchAdapter, self).__init__()
+        self._iterable = iterable
+        self._batch_size = batch_size
+        self._it = None
+
+    def __iter__(self):
+        self._it = iter(self._iterable)
+        return self
+
+    def __next__(self):
+        if self._it is None:
+            raise StopIteration()
+        batch = collections.defaultdict(list)
+        for i in range(self._batch_size):
+            try:
+                doc = next(self._it)  # type: dict
+            except StopIteration:
+                if i == 0:
+                    raise StopIteration()
+                else:
+                    self._it = None
+                    break
+            for k, v in doc.items():
+                batch[k].append(v)
+        return batch
+
+
+class ShuffledAdapter(Adapter):
+
+    def __init__(self, iterable):
+        super(ShuffledAdapter, self).__init__()
+        self._item_list = list(iterable)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return random.choice(self._item_list)
 
 
 if __name__ == '__main__':

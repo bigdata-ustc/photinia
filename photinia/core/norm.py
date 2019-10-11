@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 from . import common
 from .. import conf
 from .. import init
@@ -11,7 +10,7 @@ class BatchNorm(common.Trainable):
 
     def __init__(self,
                  name: str,
-                 size: str,
+                 size: int,
                  is_train,
                  decay: float = 0.95,
                  epsilon: float = 1e-7):
@@ -118,8 +117,12 @@ class BatchNorm(common.Trainable):
 
 class InstanceNorm(common.Trainable):
 
-    def __init__(self, name: str, eps: float = 1e-7):
+    def __init__(self,
+                 name: str,
+                 size: int,
+                 eps: float = 1e-7):
         super(InstanceNorm, self).__init__(name)
+        self._size = size
         self._eps = eps
 
     def _build(self):
@@ -127,7 +130,7 @@ class InstanceNorm(common.Trainable):
             name='w',
             init_value=init.Ones().build(
                 name='w_int',
-                shape=()
+                shape=(self._size,)
             ),
             dtype=conf.float,
             trainable=True
@@ -136,7 +139,7 @@ class InstanceNorm(common.Trainable):
             name='b',
             init_value=init.Zeros().build(
                 name='b_init',
-                shape=()
+                shape=(self._size,)
             ),
             dtype=conf.float,
             trainable=True
@@ -156,7 +159,10 @@ class InstanceNorm(common.Trainable):
 
 class LayerNorm(common.Trainable):
 
-    def __init__(self, name: str, size: int, eps: float = 1e-7):
+    def __init__(self,
+                 name: str,
+                 size: int,
+                 eps: float = 1e-7):
         super(LayerNorm, self).__init__(name)
         self._size = size
         self._eps = eps

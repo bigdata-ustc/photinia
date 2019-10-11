@@ -15,7 +15,7 @@ class AccCalculator(object):
         hit = np.equal(label_pred, label_true)
         hit = np.float32(hit)
         self._num_hit += float(np.sum(hit))
-        self._num_all += len(hit)
+        self._num_all += hit.size
 
     def reset(self):
         self._num_hit = 0
