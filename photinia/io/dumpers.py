@@ -11,6 +11,7 @@ import re
 import shutil
 
 import gridfs
+import numpy as np
 
 
 class ModelDumper(object):
@@ -262,3 +263,23 @@ def load_model_from_tree(widget,
     """Load parameters into a model (or a part of the model) using TreeDumper.
     """
     TreeDumper.get_instance().load(widget, name, path, strict)
+
+
+def save_parameters_to_npz(module, fp):
+    prefix = module.prefix
+    param_dict = module.get_parameters()
+    param_dict = {
+        re.sub('^' + prefix, '', name)
+        for name, value in param_dict.items()
+    }
+    np.savez_compressed(fp, **param_dict)
+
+
+def load_parameters_from_npz(module, fp):
+    prefix = module.prefix
+    param_dict = np.load(fp)
+    param_dict = {
+        prefix + name: value
+        for name, value in param_dict.items()
+    }
+    module.set_parameters(param_dict)

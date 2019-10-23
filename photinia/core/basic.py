@@ -12,7 +12,7 @@ from .. import init
 from ..conf import tf
 
 
-class Linear(common.Trainable):
+class Linear(common.Module):
     """Linear layer.
     y = wx + b
     """
@@ -98,7 +98,7 @@ class Linear(common.Trainable):
         return y
 
 
-class Dropout(common.Trainable):
+class Dropout(common.Module):
 
     def __init__(self,
                  name,

@@ -14,7 +14,7 @@ from .. import ops
 from ..conf import tf
 
 
-class Gate(common.Trainable):
+class Gate(common.Module):
 
     def __init__(self,
                  name,
@@ -65,7 +65,7 @@ class Gate(common.Trainable):
         return y
 
 
-class ResidualLayer(common.Trainable):
+class ResidualLayer(common.Module):
     """Residual network cell for DNN.
 
     The original version is contributed by zhkun~(Kun Zhang) in his testing code.
@@ -133,7 +133,7 @@ class ResidualLayer(common.Trainable):
         return h
 
 
-class HighwayLayer(common.Trainable):
+class HighwayLayer(common.Module):
     """Highway network cell for DNN.
 
     The original version is contributed by zhkun~(Kun Zhang) in his testing code.

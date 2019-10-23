@@ -12,7 +12,7 @@ from .. import init
 from ..conf import tf
 
 
-class GRUCell(common.Trainable):
+class GRUCell(common.Module):
 
     def __init__(self,
                  name,
@@ -180,7 +180,7 @@ class GRUCell(common.Trainable):
         return h
 
 
-class LSTMCell(common.Trainable):
+class LSTMCell(common.Module):
 
     def __init__(self,
                  name,
@@ -387,7 +387,7 @@ class LSTMCell(common.Trainable):
         return cell_state, state
 
 
-class GRU(common.Trainable):
+class GRU(common.Module):
 
     def __init__(self,
                  name,
@@ -457,7 +457,7 @@ class GRU(common.Trainable):
         return states_forward
 
 
-class BiGRU(common.Trainable):
+class BiGRU(common.Module):
 
     def __init__(self,
                  name,

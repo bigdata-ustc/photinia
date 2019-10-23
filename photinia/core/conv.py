@@ -14,7 +14,7 @@ from .. import init
 from ..conf import tf
 
 
-class Conv2D(common.Trainable):
+class Conv2D(common.Module):
 
     def __init__(self,
                  name,
@@ -192,7 +192,7 @@ class Conv2D(common.Trainable):
         return y
 
 
-class Deconv2D(common.Trainable):
+class Deconv2D(common.Module):
 
     def __init__(self,
                  name,
@@ -363,7 +363,7 @@ class Deconv2D(common.Trainable):
         return y
 
 
-class Pool2D(common.Trainable):
+class Pool2D(common.Module):
 
     def __init__(self,
                  name,
@@ -506,7 +506,7 @@ class MaxPool2D(Pool2D):
         )
 
 
-class GroupConv2D(common.Trainable):
+class GroupConv2D(common.Module):
     """Group 2D convolutional layer.
     """
 

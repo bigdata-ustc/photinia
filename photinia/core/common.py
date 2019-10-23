@@ -98,6 +98,7 @@ def deprecated(message):
 
 _VAR_DICT = {}
 _PLACEHOLDER_DICT = {}
+_LINK_DICT = {}
 _TRAINABLE_DICT = {}
 
 
@@ -116,6 +117,8 @@ def variable(name,
         instance = _VAR_DICT[full_name]
         # if type(instance) is not tf.Variable:
         #     raise TypeError()
+    elif full_name in _LINK_DICT:
+        instance = _LINK_DICT[full_name]
     else:
         instance = tf.Variable(
             initial_value=init_value,
@@ -154,6 +157,8 @@ def placeholder(name,
         pass
     if full_name in _PLACEHOLDER_DICT:
         instance = _PLACEHOLDER_DICT[full_name]
+    elif full_name in _LINK_DICT:
+        instance = _LINK_DICT[full_name]
     else:
         if default_value is None:
             instance = tf.placeholder(name=name, shape=shape, dtype=dtype)
@@ -163,7 +168,15 @@ def placeholder(name,
     return instance
 
 
-class _TrainableType(type):
+def link(name, tensor):
+    full_name = get_full_name(name)
+    if full_name in _LINK_DICT:
+        raise ValueError(f'Duplicated link name {full_name}.')
+    _LINK_DICT[full_name] = tensor
+    return tensor
+
+
+class _ModuleType(type):
 
     def __call__(cls, name, *args, **kwargs):
         scope = get_name_scope()
@@ -174,7 +187,7 @@ class _TrainableType(type):
             if type(instance) is not cls:
                 raise TypeError()
         else:
-            instance = super(_TrainableType, cls).__call__(
+            instance = super(_ModuleType, cls).__call__(
                 (name, scope, full_name, prefix),
                 *args,
                 **kwargs
@@ -189,7 +202,7 @@ class _TrainableType(type):
         return instance
 
 
-class Trainable(object, metaclass=_TrainableType):
+class Module(object, metaclass=_ModuleType):
 
     def __init__(self, name, *args, **kwargs):
         self._name, self._scope, self._full_name, self._prefix = name
@@ -351,7 +364,7 @@ class Trainable(object, metaclass=_TrainableType):
         name = self._prefix + name
         if name in _TRAINABLE_DICT:
             instance = _TRAINABLE_DICT[name]
-            if isinstance(instance, Trainable):
+            if isinstance(instance, Module):
                 return instance
 
         if name.rfind(':') == -1:
@@ -362,12 +375,25 @@ class Trainable(object, metaclass=_TrainableType):
             return None
 
 
-class Model(Trainable):
-    pass
+class Trainable(Module):
+
+    @deprecated('Don\'t use Trainable as base class any more. Please use Module instead.')
+    def __init__(self, name):
+        super(Trainable, self).__init__(name)
 
 
-class Widget(Trainable):
-    pass
+class Model(Module):
+
+    @deprecated('Don\'t use Model as base class any more. Please use Module instead.')
+    def __init__(self, name):
+        super(Model, self).__init__(name)
+
+
+class Widget(Module):
+
+    @deprecated('Don\'t use Widget as base class any more. Please use Module instead.')
+    def __init__(self, name):
+        super(Widget, self).__init__(name)
 
 
 def setup(x, widget_list):

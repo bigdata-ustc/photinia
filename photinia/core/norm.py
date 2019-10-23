@@ -6,19 +6,19 @@ from .. import init
 from ..conf import tf
 
 
-class BatchNorm(common.Trainable):
+class BatchNorm(common.Module):
 
     def __init__(self,
                  name: str,
                  size: int,
                  is_train,
                  decay: float = 0.95,
-                 epsilon: float = 1e-7):
+                 eps: float = 1e-7):
         super(BatchNorm, self).__init__(name)
         self._size = size
         self._is_train = is_train
         self._decay = decay
-        self._epsilon = epsilon
+        self._eps = eps
 
     def _build(self):
         self._beta = common.variable(
@@ -48,10 +48,10 @@ class BatchNorm(common.Trainable):
             dtype=conf.float,
             trainable=True
         )
-        self._variance = common.variable(
-            'variance',
+        self._var = common.variable(
+            'var',
             init_value=init.Ones().build(
-                name='variance_init',
+                name='var_init',
                 shape=(self._size,)
             ),
             dtype=conf.float,
@@ -65,57 +65,38 @@ class BatchNorm(common.Trainable):
             else:
                 return self._setup_for_predict(x, name)
         else:
-            # Here, "tf.where" cannot be used since it will trigger both train and predict branches.
-            # Any Tensors or Operations created outside of true_fn and false_fn will be executed regardless of which
-            # branch is selected at runtime.
-            return tf.cond(
+            return tf.where(
                 self._is_train,
-                lambda: self._setup_for_train(x, None),
-                lambda: self._setup_for_predict(x, None),
+                self._setup_for_train(x, None),
+                self._setup_for_predict(x, None),
                 name=name
             )
 
     def _setup_for_train(self, x, name):
         axes = tuple(range(len(x.shape) - 1))
-        mean, variance = tf.nn.moments(x=x, axes=axes)
+        mean, var = tf.nn.moments(x=x, axes=axes)
 
-        d1 = self._decay
-        d2 = 1.0 - d1
-        update_mean = tf.assign(
-            self._mean,
-            tf.multiply(d1, self._mean) + tf.multiply(d2, mean)
-        )
-        update_variance = tf.assign(
-            self._variance,
-            tf.multiply(d1, self._variance) + tf.multiply(d2, variance)
-        )
-        with tf.control_dependencies([update_mean, update_variance]):
+        d2 = (1. - self._decay) * tf.cast(self._is_train, tf.float32)
+        d1 = 1. - d2
+        _mean, _var = self._mean, self._var
+        with tf.control_dependencies([tf.assign(self._mean, d1 * _mean + d2 * mean)]):
             mean = tf.identity(mean)
-            variance = tf.identity(variance)
+        with tf.control_dependencies([tf.assign(self._var, d1 * _var + d2 * var)]):
+            var = tf.identity(var)
 
-        return tf.nn.batch_normalization(
-            x=x,
-            mean=mean,
-            variance=variance,
-            offset=self._beta,
-            scale=self._gamma,
-            variance_epsilon=self._epsilon,
-            name=name
-        )
+        x = (x - mean) * tf.rsqrt(var + self._eps)
+        x = tf.add(self._gamma * x, self._beta, name=name)
+        return x
 
     def _setup_for_predict(self, x, name):
-        return tf.nn.batch_normalization(
-            x=x,
-            mean=tf.stop_gradient(self._mean),
-            variance=tf.stop_gradient(self._variance),
-            offset=self._beta,
-            scale=self._gamma,
-            variance_epsilon=self._epsilon,
-            name=name
-        )
+        mean = tf.stop_gradient(self._mean)
+        var = tf.stop_gradient(self._var)
+        x = (x - mean) * tf.rsqrt(var + self._eps)
+        x = tf.add(self._gamma * x, self._beta, name=name)
+        return x
 
 
-class InstanceNorm(common.Trainable):
+class InstanceNorm(common.Module):
 
     def __init__(self,
                  name: str,
@@ -151,13 +132,13 @@ class InstanceNorm(common.Trainable):
         feature_size = shape[-1]
         x = tf.reshape(x, (batch_size, -1, feature_size))
         mean, var = tf.nn.moments(x, axes=(1,), keep_dims=True)
-        x = (x - mean) / tf.sqrt(var + self._eps)
+        x = (x - mean) * tf.rsqrt(var + self._eps)
         x = tf.reshape(x, shape)
         x = tf.add(self._w * x, self._b, name=name)
         return x
 
 
-class LayerNorm(common.Trainable):
+class LayerNorm(common.Module):
 
     def __init__(self,
                  name: str,
@@ -190,12 +171,12 @@ class LayerNorm(common.Trainable):
     def setup(self, x, name=None):
         axes = tuple(range(1, len(x.shape)))
         mean, var = tf.nn.moments(x, axes=axes, keep_dims=True)
-        x = (x - mean) / tf.sqrt(var + self._eps)
+        x = (x - mean) * tf.rsqrt(var + self._eps)
         x = tf.add(self._w * x, self._b, name=name)
         return x
 
 
-class GroupNorm(common.Trainable):
+class GroupNorm(common.Module):
 
     def __init__(self,
                  name: str,
@@ -233,7 +214,7 @@ class GroupNorm(common.Trainable):
         batch_size = shape[0]
         x = tf.reshape(x, (batch_size, -1, self._num_groups, self._size // self._num_groups))
         mean, var = tf.nn.moments(x, axes=(1, 3), keep_dims=True)
-        x = (x - mean) / tf.sqrt(var + self._eps)
+        x = (x - mean) * tf.rsqrt(var + self._eps)
         x = tf.reshape(x, shape)
         x = tf.add(self._w * x, self._b, name=name)
         return x

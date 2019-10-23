@@ -15,7 +15,7 @@ class EarlyStopping(object):
 
         Args:
             window_size (int): The windows size to monitor after the best performance.
-            model (photinia.Trainable): The model to tune.
+            model (photinia.Module): The model to tune.
 
         """
         self.window_size = window_size
@@ -54,7 +54,7 @@ class EarlyStopping(object):
         self._counter = 0
 
 
-class ExponentialDecayedValue(core.Trainable):
+class ExponentialDecayedValue(core.Module):
     def __init__(self,
                  name,
                  init_value,

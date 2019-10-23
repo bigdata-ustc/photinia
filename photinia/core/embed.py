@@ -13,7 +13,7 @@ from .. import init
 from ..conf import tf
 
 
-class Embedding(common.Trainable):
+class Embedding(common.Module):
 
     def __init__(self,
                  name,
@@ -70,7 +70,7 @@ class Embedding(common.Trainable):
         return common.get_session().run(self._w)
 
 
-class CharLevelEmbedding(common.Trainable):
+class CharLevelEmbedding(common.Module):
 
     def __init__(self,
                  name,

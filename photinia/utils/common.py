@@ -34,9 +34,9 @@ def one_hot(index, dims, dtype=np.uint8):
 
 
 def get_trainable_variables(include, exclude=None):
-    if isinstance(include, ph.Trainable):
+    if isinstance(include, ph.Module):
         include = [include]
-    if isinstance(exclude, ph.Trainable):
+    if isinstance(exclude, ph.Module):
         exclude = [exclude]
     exclude_prefix = [w.prefix for w in exclude]
     tvars = []
